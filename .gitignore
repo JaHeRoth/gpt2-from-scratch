@@ -1,4 +1,5 @@
-.idea/*
+.idea
+data
 
 # pixi environments
 .pixi
