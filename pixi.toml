@@ -1,0 +1,10 @@
+[workspace]
+authors = ["Jacob H. Rothschild <jacob.r.developer@gmail.com>"]
+channels = ["conda-forge"]
+name = "reimplementing"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
