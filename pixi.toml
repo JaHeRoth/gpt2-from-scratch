@@ -10,3 +10,4 @@ version = "0.1.0"
 [dependencies]
 pytorch = ">=2.6.0,<3"
 pixi-pycharm = ">=0.0.8,<0.0.9"
+tqdm = ">=4.67.1,<5"
