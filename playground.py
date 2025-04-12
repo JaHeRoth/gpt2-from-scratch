@@ -2,7 +2,7 @@
 import torch
 from tqdm import tqdm
 
-data = [[1, 2], [3, 5], [5, 8]]
+data = [[1, 2], [3, 5], [5, 8], [7, 11]]
 x = torch.tensor(data)
 
 # %%
@@ -15,10 +15,10 @@ print(z)
 
 # %%
 lr = 0.01
-y = torch.tensor([[4], [11], [18]]).float()
+y = torch.tensor([[4], [11], [18], [25]]).float()
 
 w = torch.rand(in_dim + 1, out_dim, requires_grad=True)
-for i in tqdm(range(5000)):
+for i in tqdm(range(10_000)):
     z = x_w_ones @ w
     loss = torch.nn.functional.mse_loss(z, y)
 
