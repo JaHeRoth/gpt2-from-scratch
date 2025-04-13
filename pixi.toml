@@ -1,8 +1,8 @@
 [workspace]
-authors = ["Jacob H. Rothschild <jacob.r.developer@gmail.com>"]
+authors = ["Jacob H. Rothschild"]
 channels = ["conda-forge"]
 name = "reimplementing"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 version = "0.1.0"
 
 [tasks]
