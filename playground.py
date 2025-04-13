@@ -98,13 +98,135 @@ plt.imshow(img, cmap="gray")
 plt.show()
 print(f"Label: {label}")
 
+# %%
+import torch
+from torchvision import datasets
+from torchvision.transforms import ToTensor, Lambda
+
+ds = datasets.FashionMNIST(
+    root="data",
+    train=True,
+    download=True,
+    transform=ToTensor(),
+    target_transform=Lambda(
+        lambda y: torch.zeros(10, dtype=torch.float).scatter_(dim=0, index=torch.tensor(y), value=1)
+    )
+)
+
+# %%
+import os
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+print(f"Using {device} device")
+
+class NeuralNetwork(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(28*28, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10),
+        )
+
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
+
+
+model = NeuralNetwork().to(device)
+print(model)
+
+# %%
+X = torch.rand(1, 28, 28, device=device)
+logits = model(X)
+pred_probab = nn.Softmax(dim=1)(logits)
+y_pred = pred_probab.argmax(1)
+print(f"Predicted class: {y_pred}")
+
+# %%
+input_image = torch.rand(3, 28, 28)
+print(input_image.size())
+
+# %%
+flatten = nn.Flatten()
+flat_image = flatten(input_image)
+print(flat_image.size())
+
+# %%
+layer1 = nn.Linear(in_features=28*28, out_features=20)
+hidden1 = layer1(flat_image)
+print(hidden1.size())
+
+# %%
+print(f"Before ReLU: {hidden1}\n\n")
+hidden1 = nn.ReLU()(hidden1)
+print(f"After ReLU: {hidden1}")
+
+# %%
+seq_modules = nn.Sequential(
+    flatten,
+    layer1,
+    nn.ReLU(),
+    nn.Linear(20, 10),
+)
+input_image = torch.rand(3, 28, 28)
+logits = seq_modules(input_image)
+
+# %%
+softmax = nn.Softmax(dim=1)
+pred_probab = softmax(logits)
+
+# %%
+print(f"Model structure: {model}\n\n")
+
+for name, param in model.named_parameters():
+    print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
+
+# %%
+import torch
+
+x = torch.ones(5)
+y = torch.zeros(3)
+w = torch.randn(5, 3, requires_grad=True)
+b = torch.randn(3, requires_grad=True)
+z = x @ w + b
+loss = torch.nn.functional.binary_cross_entropy_with_logits(z, y)
+
+print(f"Gradient function for z = {z.grad_fn}")
+print(f"Gradient function for loss = {loss.grad_fn}")
+
+loss.backward()
+print(w.grad)
+print(b.grad)
+
+# %%
+z = x @ w + b
+print(z.requires_grad)
+
+with torch.no_grad():
+    z = x @ w + b
+print(z.requires_grad)
+
+# %%
+z = x @ w + b
+print(z.requires_grad)
+print(z.detach().requires_grad)
+
 
 # %%
 class Linear(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super().__init__()
-        self.w = torch.rand(in_dim, out_dim, requires_grad=True)
-        self.b = torch.ones(out_dim, 1, requires_grad=True)
+        self.w = torch.rand(in_dim, out_dim)
+        self.b = torch.ones(out_dim, 1)
 
     def forward(self, x):
         return x @ self.w + self.b
