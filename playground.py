@@ -409,3 +409,246 @@ def model(xb):
 print(loss_func(model(xb), yb), accuracy(model(xb), yb))
 
 # %%
+from torch import nn
+
+class MnistLogistic(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.weights = nn.Parameter(torch.randn(784, 10) / math.sqrt(784))
+        self.bias = nn.Parameter(torch.zeros(10))
+
+    def forward(self, xb):
+        return xb @ self.weights + self.bias
+
+model = MnistLogistic()
+
+print(loss_func(model(xb), yb))
+
+def fit():
+    for epoch in range(epochs):
+        for i in range(math.ceil(n / bs)):
+            # breakpoint()
+            start_i = i * bs
+            end_i = start_i + bs
+            xb = x_train[start_i:end_i]
+            yb = y_train[start_i:end_i]
+            pred = model(xb)
+            loss = loss_func(pred, yb)
+
+            loss.backward()
+            with torch.no_grad():
+                # Seems main value of subclassing nn.Module is encapsulation:
+                #  not having to handle weight tensors individually
+                for p in model.parameters():
+                    p -= lr * p.grad
+                model.zero_grad()
+
+fit()
+print(loss_func(model(xb), yb))
+
+# %%
+class MnistLogistic(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # E.g. nn.Linear replaces parts of DAG with pre-made components
+        self.linear = nn.Linear(784, 10)
+
+    def forward(self, xb):
+        return self.linear(xb)
+
+model = MnistLogistic()
+print(loss_func(model(xb), yb))
+fit()
+print(loss_func(model(xb), yb))
+
+# %%
+from torch import optim
+
+def get_model_and_optimizer():
+    model = MnistLogistic()
+    optimizer = optim.SGD(model.parameters(), lr=lr)
+    return model, optimizer
+
+model, opt = get_model_and_optimizer()
+print(loss_func(model(xb), yb))
+
+for epoch in range(epochs):
+    for i in range(math.ceil(n / bs)):
+        # breakpoint()
+        start_i = i * bs
+        end_i = start_i + bs
+        xb = x_train[start_i:end_i]
+        yb = y_train[start_i:end_i]
+        pred = model(xb)
+        loss = loss_func(pred, yb)
+
+        loss.backward()
+        # So we see optimizer replacing boilerplate code for freezing gradients, updating weights based on gradients
+        #  and zeroing gradients.
+        opt.step()
+        opt.zero_grad()
+
+print(loss_func(model(xb), yb))
+
+# %%
+from torch.utils.data import TensorDataset
+
+train_ds = TensorDataset(x_train, y_train)
+
+for epoch in range(epochs):
+    for i in range(math.ceil(n / bs)):
+        # In this case the reward for using TensorDataset is minimal, thinking main advantage comes in loading
+        #  datasets not yet in memory (e.g. from URLs) and in combining with DataLoader
+        xb, yb = train_ds[i * bs:(i + 1) * bs]
+        pred = model(xb)
+        loss = loss_func(pred, yb)
+
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+
+print(loss_func(model(xb), yb))
+
+# %%
+from torch.utils.data import DataLoader
+
+train_ds = TensorDataset(x_train, y_train)
+train_dl = DataLoader(train_ds, batch_size=bs)
+
+for epoch in range(epochs):
+    # So advantage is eliminating boilerplate around batching and shuffling of the data
+    for xb, yb in train_dl:
+        loss_func(model(xb), yb).backward()
+        opt.step()
+        opt.zero_grad()
+
+print(loss_func(model(xb), yb))
+
+# %%
+train_ds = TensorDataset(x_train, y_train)
+train_dl = DataLoader(train_ds, batch_size=bs, shuffle=True)
+
+valid_ds = TensorDataset(x_valid, y_valid)
+# Shuffling validation dataset has no effect on outcomes and just wastes time
+# Since we're not keeping track of gradients for validation dataset the memory consumption is lower,
+#  so we can afford larger batch sizes
+valid_dl = DataLoader(valid_ds, batch_size=bs * 2)
+
+model, opt = get_model_and_optimizer()
+
+def fit(epochs, model, loss_func, opt, train_dl, valid_dl):
+    for epoch in range(epochs):
+        model.train()
+        for xb, yb in train_dl:
+            loss_func(model(xb), yb).backward()
+            opt.step()
+            opt.zero_grad()
+
+        model.eval()
+        with torch.no_grad():
+            valid_loss = sum(loss_func(model(xb), yb) for xb, yb in valid_dl) / len(valid_dl)
+        print(epoch, valid_loss)
+
+fit(5, model, loss_func, opt, train_dl, valid_dl)
+
+# %%
+class MnistCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(16, 10, kernel_size=3, stride=2, padding=1)
+
+    def forward(self, xb):
+        xb = xb.view(-1, 1, 28, 28)
+        xb = F.relu(self.conv1(xb))
+        xb = F.relu(self.conv2(xb))
+        xb = F.relu(self.conv3(xb))
+        xb = F.avg_pool2d(xb, 4)
+        return xb.view(-1, xb.size(1))
+
+
+lr = 0.1
+model = MnistCNN()
+opt = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+fit(5, model, loss_func, opt, train_dl, valid_dl)
+
+# %%
+class Lambda(nn.Module):
+    def __init__(self, func: Callable):
+        super().__init__()
+        self.func = func
+
+    def forward(self, x):
+        return self.func(x)
+
+
+# So Sequential lets us skip the whole subclassing of nn.Module
+model = nn.Sequential(
+    Lambda(lambda x: x.view(-1, 1, 28, 28)),
+    nn.ReLU(),
+    nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1),
+    nn.ReLU(),
+    nn.Conv2d(16, 16, kernel_size=3, stride=2, padding=1),
+    nn.ReLU(),
+    nn.Conv2d(16, 10, kernel_size=3, stride=2, padding=1),
+    nn.AvgPool2d(4),
+    Lambda(lambda x: x.view(x.size(0), -1))
+)
+
+opt = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+fit(5, model, loss_func, opt, train_dl, valid_dl)
+
+# %%
+class WrappedDataLoader:
+    def __init__(self, dl, func, device):
+        self.dl = dl
+        self.func = func
+        self.device = device
+
+    def __len__(self):
+        return len(self.dl)
+
+    def __iter__(self):
+        for b in self.dl:
+            b_on_device = (d.to(self.device) for d in b)
+            yield self.func(*b_on_device)
+
+def preprocess(x: torch.Tensor, y: torch.Tensor):
+    return x.view(-1, 1, 28, 28), y
+
+if torch.accelerator.is_available():
+    device = torch.accelerator.current_accelerator().type
+elif torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
+
+train_dl = WrappedDataLoader(
+    DataLoader(train_ds, batch_size=bs, shuffle=True),
+    preprocess,
+    device,
+)
+valid_dl = WrappedDataLoader(
+    DataLoader(valid_ds, batch_size=bs * 2),
+    preprocess,
+    device,
+)
+
+model = nn.Sequential(
+    nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1),
+    nn.ReLU(),
+    nn.Conv2d(16, 16, kernel_size=3, stride=2, padding=1),
+    nn.ReLU(),
+    nn.Conv2d(16, 10, kernel_size=3, stride=2, padding=1),
+    nn.ReLU(),
+    nn.AdaptiveAvgPool2d(1),
+    Lambda(lambda x: x.view(x.size(0), -1)),
+)
+model.to(device)
+opt = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+
+fit(10, model, loss_func, opt, train_dl, valid_dl)
+
+
+# %%
