@@ -312,9 +312,6 @@ with gzip.open(FILE_PATH, "rb") as f:
     x_valid, y_valid = mnist[1]
 
 # %%
-%matplotlib inline
-
-# %%
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
