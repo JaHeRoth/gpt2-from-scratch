@@ -1,6 +1,9 @@
 # %%
 import torch
 
+# Note that using cpu actually turned out to be an order of magnitude faster
+#  than mps for this use case. I don't know exactly why, but maybe because
+#  mps forced us to disable torch._dynamo due to the linked issue.
 if torch.cuda.is_available():
     device = torch.device("cuda")
 elif torch.backends.mps.is_available():
