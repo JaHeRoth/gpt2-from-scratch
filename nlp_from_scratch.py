@@ -4,13 +4,16 @@ import torch
 # Note that using cpu actually turned out to be an order of magnitude faster
 #  than mps for this use case. I don't know exactly why, but maybe because
 #  mps forced us to disable torch._dynamo due to the linked issue.
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-elif torch.backends.mps.is_available():
-    torch._dynamo.disable()  # https://github.com/pytorch/pytorch/issues/149184
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
+# if torch.cuda.is_available():
+#     device = torch.device("cuda")
+# elif torch.backends.mps.is_available():
+#     torch._dynamo.disable()  # https://github.com/pytorch/pytorch/issues/149184
+#     device = torch.device("mps")
+# else:
+#     device = torch.device("cpu")
+
+# Was way faster than mps, maybe because of not having to disable torch._dynamo
+device = torch.device("cpu")
 
 torch.set_default_device(device)
 print(f"Using device: {torch.get_default_device()}")
