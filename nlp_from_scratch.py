@@ -4,7 +4,7 @@ import torch
 if torch.cuda.is_available():
     device = torch.device("cuda")
 elif torch.backends.mps.is_available():
-    torch._dynamo.disable()
+    torch._dynamo.disable()  # https://github.com/pytorch/pytorch/issues/149184
     device = torch.device("mps")
 else:
     device = torch.device("cpu")
