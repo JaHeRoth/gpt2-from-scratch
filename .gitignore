@@ -1,5 +1,6 @@
 .idea
 data
+runs
 
 # pixi environments
 .pixi
