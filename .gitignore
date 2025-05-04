@@ -1,6 +1,7 @@
 .idea
 data
 runs
+.ipynb_checkpoints
 
 # pixi environments
 .pixi

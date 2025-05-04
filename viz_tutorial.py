@@ -81,7 +81,7 @@ optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 # %%
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter('../runs/fashion_mnist_experiment_1')
+writer = SummaryWriter('runs/fashion_mnist_experiment_1')
 
 # %%
 images, _ = next(iter(trainloader))
