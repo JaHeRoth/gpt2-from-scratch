@@ -40,20 +40,22 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments
 
 model_name = "sshleifer/tiny-gpt2"
-dataset_name = "rotten_tomatoes"
-
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-tokenizer.pad_token = tokenizer.eos_token
-dataset = load_dataset(dataset_name)
+
+tokenizer.pad_token = tokenizer.eos_token  # TODO: Padding token and <unk> token (or replace <unk> with something that maps to models UNK token)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+dataset = load_dataset("wikitext", "wikitext-2-v1")
+
 def tokenize_dataset(dataset):
-    return tokenizer(dataset["text"])
+    tokenized = tokenizer(dataset["text"], truncation=True)
+    tokenized["labels"] = tokenized["input_ids"]
+    return tokenized
 tokenized_ds = dataset.map(tokenize_dataset, batched=True)
 
 training_args = TrainingArguments(
-    output_dir="tiny-gpt2-rotten-tomatoes",
+    output_dir="tiny-gpt2-wikitext",
     learning_rate=2e-5,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
@@ -66,11 +68,161 @@ trainer = Trainer(
     args=training_args,
     train_dataset=tokenized_ds["train"],
     eval_dataset=tokenized_ds["test"],
-    tokenizer=tokenizer,
+    # tokenizer=tokenizer,
     data_collator=data_collator,
 )
 
 # %%
 trainer.train()
+
+# %%
+tokenizer(["Hello", " world", "Hello world"], padding=True, truncation=True)
+
+# %%
+tokenizer.model_max_length
+
+# %%
+dataset
+
+# %%
+tokenized_ds
+
+# %%
+
+# %%
+dataset = load_dataset("wikitext", "wikitext-2-v1")
+
+# %%
+for i in range(10):
+    print(dataset["train"][i])
+
+# %%
+tokenizer([dataset["train"][i]["text"] for i in range(10)], padding=True, truncation=True, max_length=10)
+
+# %%
+max(len(dataset["train"][i]["text"]) for i in range(10))
+
+# %%
+max(len(tokens) for tokens in tokenizer([dataset["train"][i]["text"] for i in range(len(dataset["train"]))])["input_ids"])
+
+# %%
+len(dataset["train"])
+
+# %%
+dataset
+
+# %%
+tokenized_ds
+
+# %%
+from transformers import AutoTokenizer
+
+context_length = 2
+tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")  # TODO: Replace by simpler tokenizer?
+
+# %%
+outputs = tokenizer(
+    dataset["train"][:2]["text"],
+    truncation=True,
+    max_length=context_length,
+    return_overflowing_tokens=True,
+    return_length=True,
+)
+
+print(f"Input IDs length: {len(outputs['input_ids'])}")
+print(f"Input chunk lengths: {(outputs['length'])}")
+print(f"Chunk mapping: {outputs['overflow_to_sample_mapping']}")
+
+outputs
+
+
+# %%
+def tokenize(batch):
+    # TODO: Sequence packing
+    outputs = tokenizer(
+        batch["text"],
+        truncation=True,
+        max_length=context_length,
+        return_overflowing_tokens=True,
+        return_length=True,
+    )
+    return {
+        "input_ids": [
+            input_ids
+            for length, input_ids in zip(outputs["length"], outputs["input_ids"])
+            if length == context_length
+        ]
+    }
+
+tokenized_ds = dataset.map(
+    tokenize, batched=True, remove_columns=dataset["train"].column_names
+)
+tokenized_ds
+
+# %%
+tokenizer
+
+# %%
+from transformers import AutoTokenizer, GPT2LMHeadModel, AutoConfig
+
+config = AutoConfig.from_pretrained(
+    "gpt2",
+    vocab_size=len(tokenizer),
+    n_ctx=context_length,
+    bos_token_id=tokenizer.bos_token_id,
+    eos_token_id=tokenizer.eos_token_id,
+)
+
+# %%
+model = GPT2LMHeadModel(config)
+model_size = sum(t.numel() for t in model.parameters())
+print(f"GPT-2 size: {model_size/1000**2:.1f}M parameters")
+
+# %%
+from transformers import DataCollatorForLanguageModeling
+
+tokenizer.pad_token = tokenizer.eos_token
+data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+
+# %%
+data_collator([tokenized_ds["train"][i] for i in range(2)])
+
+# %%
+out = data_collator([tokenized_ds["train"][i] for i in range(5)])
+for key in out:
+    print(f"{key} shape: {out[key].shape}")
+
+# %%
+dataset
+
+# %%
+from transformers import Trainer, TrainingArguments
+
+args = TrainingArguments(
+    output_dir="mygpt2",
+    per_device_train_batch_size=32,
+    per_device_eval_batch_size=32,
+    # evaluation_strategy="steps",
+    eval_steps=5_000,
+    logging_steps=5_000,
+    gradient_accumulation_steps=8,
+    num_train_epochs=1,
+    weight_decay=0.1,
+    warmup_steps=1_000,
+    lr_scheduler_type="cosine",
+    learning_rate=5e-4,
+    save_steps=5_000,
+    fp16=False,
+    push_to_hub=True,
+)
+
+trainer = Trainer(
+    model=model,
+    # tokenizer=tokenizer,
+    args=args,
+    data_collator=data_collator,
+    train_dataset=tokenized_ds["train"],
+    eval_dataset=tokenized_ds["validation"],
+)
 
 # %%
