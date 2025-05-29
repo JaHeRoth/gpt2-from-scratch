@@ -127,26 +127,73 @@ args = TrainingArguments(
     per_device_train_batch_size=32,
     per_device_eval_batch_size=32,
     # evaluation_strategy="steps",
-    eval_steps=5_000,
-    logging_steps=5_000,
+    eval_steps=50,
+    logging_steps=50,
     gradient_accumulation_steps=8,
-    num_train_epochs=1,
+    max_steps=100,
     weight_decay=0.1,
-    warmup_steps=1_000,
+    warmup_steps=10,
     lr_scheduler_type="cosine",
     learning_rate=5e-4,
-    save_steps=5_000,
-    fp16=False,
+    save_steps=50,
+    use_cpu=True,
     push_to_hub=True,
 )
 
-# trainer = Trainer(
-#     model=model,
-#     # tokenizer=tokenizer,
-#     args=args,
-#     data_collator=data_collator,
-#     train_dataset=tokenized_ds["train"],
-#     eval_dataset=tokenized_ds["validation"],
-# )
+trainer = Trainer(
+    model=model,
+    # tokenizer=tokenizer,
+    args=args,
+    data_collator=data_collator,
+    train_dataset=tokenized_ds["train"],
+    eval_dataset=tokenized_ds["validation"],
+)
+
+# %%
+trainer.train()
+
+# %%
+prompt = "Once upon a time"
+input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+output_ids = model.generate(
+    input_ids,
+    max_new_tokens=50,          # Adjust the number of tokens to generate
+    do_sample=True,             # Enable sampling for more varied outputs
+    temperature=0.7,            # Control randomness: lower is less random
+    top_k=50,                   # Consider the top_k tokens by probability
+    top_p=0.95,                 # Nucleus sampling: consider tokens with cumulative probability >= top_p
+    no_repeat_ngram_size=2,     # Prevent repeating n-grams
+    early_stopping=True         # Stop early when an end-of-sequence token is generated
+)
+output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+print(output_text)
+
+# %%
+output_ids[0]
+
+# %%
+tokenizer("unk")
+
+# %%
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model = AutoModelForCausalLM.from_pretrained("jaheroth/wiki-gpt2", torch_dtype="auto", device_map="auto")
+tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+
+# %%
+prompt = "The secret to baking a good cake is "
+input_ids = tokenizer(prompt, return_tensors="pt").to("cpu")
+output_ids = model.to("cpu").generate(
+    **input_ids,
+    max_new_tokens=50,          # Adjust the number of tokens to generate
+    do_sample=True,             # Enable sampling for more varied outputs
+    temperature=0.7,            # Control randomness: lower is less random
+    top_k=50,                   # Consider the top_k tokens by probability
+    top_p=0.95,                 # Nucleus sampling: consider tokens with cumulative probability >= top_p
+    no_repeat_ngram_size=2,     # Prevent repeating n-grams
+    early_stopping=True         # Stop early when an end-of-sequence token is generated
+)
+output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+print(output_text)
 
 # %%
