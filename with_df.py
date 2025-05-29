@@ -140,13 +140,13 @@ args = TrainingArguments(
     push_to_hub=True,
 )
 
-trainer = Trainer(
-    model=model,
-    # tokenizer=tokenizer,
-    args=args,
-    data_collator=data_collator,
-    train_dataset=tokenized_ds["train"],
-    eval_dataset=tokenized_ds["validation"],
-)
+# trainer = Trainer(
+#     model=model,
+#     # tokenizer=tokenizer,
+#     args=args,
+#     data_collator=data_collator,
+#     train_dataset=tokenized_ds["train"],
+#     eval_dataset=tokenized_ds["validation"],
+# )
 
 # %%
