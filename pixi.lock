@@ -145,6 +145,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyterlab_pygments-0.3.0-pyhd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyterlab_server-2.27.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jupyterlab_widgets-3.0.14-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/jupytext-1.17.1-pyh80e38bb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/kiwisolver-1.4.7-py313hf9c7212_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/krb5-1.21.3-h237132a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/lame-3.100-h1a8c8d9_1003.tar.bz2
@@ -2127,6 +2128,21 @@ packages:
   license_family: BSD
   size: 187102
   timestamp: 1744291153222
+- conda: https://conda.anaconda.org/conda-forge/noarch/jupytext-1.17.1-pyh80e38bb_0.conda
+  sha256: a438d610eba6e9dc8ad8e8578d71542f093e44d6cf1e59d92538e5a87059089c
+  md5: 0fa86af955cc079bb31ac1783cf3cb0e
+  depends:
+  - markdown-it-py >=1.0
+  - mdit-py-plugins
+  - nbformat
+  - packaging
+  - python >=3.9
+  - pyyaml
+  - tomli
+  license: MIT
+  license_family: MIT
+  size: 108425
+  timestamp: 1745744913813
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/kiwisolver-1.4.7-py313hf9c7212_0.conda
   sha256: 14a53c1dbe9eef23cd65956753de8f6c5beb282808b7780d79af0a286ba3eee9
   md5: 830d9777f1c5f26ebb4286775f95658a
