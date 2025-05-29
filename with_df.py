@@ -37,21 +37,19 @@ p("Hi, my name ", max_length=50, truncation=True)
 
 # %%
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
 
 model_name = "sshleifer/tiny-gpt2"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 tokenizer.pad_token = tokenizer.eos_token  # TODO: Padding token and <unk> token (or replace <unk> with something that maps to models UNK token)
-data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 dataset = load_dataset("wikitext", "wikitext-2-v1")
 
 def tokenize_dataset(dataset):
-    tokenized = tokenizer(dataset["text"], truncation=True)
-    tokenized["labels"] = tokenized["input_ids"]
-    return tokenized
+    return tokenizer(dataset["text"], truncation=True)
 tokenized_ds = dataset.map(tokenize_dataset, batched=True)
 
 training_args = TrainingArguments(
