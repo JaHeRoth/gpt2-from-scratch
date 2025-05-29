@@ -17,6 +17,14 @@ else:
 print(f"{device=}")
 
 # %%
+from transformers import AutoTokenizer
+
+context_length = 2
+tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")  # TODO: Replace by simpler tokenizer?
+
+# %%
+from datasets import load_dataset
+
 dataset = load_dataset("wikitext", "wikitext-2-v1")
 
 # %%
@@ -36,11 +44,6 @@ len(dataset["train"])
 dataset
 
 # %%
-from transformers import AutoTokenizer
-
-context_length = 2
-tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")  # TODO: Replace by simpler tokenizer?
-
 outputs = tokenizer(
     dataset["train"][:2]["text"],
     truncation=True,
