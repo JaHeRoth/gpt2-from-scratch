@@ -17,77 +17,6 @@ else:
 print(f"{device=}")
 
 # %%
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-model_name = "sshleifer/tiny-gpt2"
-
-model = AutoModelForCausalLM.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-inputs = tokenizer(["Hi, my name is what my name is "], return_tensors="pt")
-outputs = model.generate(**inputs, max_length=30)
-for s in tokenizer.batch_decode(outputs):
-    print(s)
-
-# %%
-from transformers import pipeline
-
-p = pipeline("text-generation", model=model_name, device_map=device)
-p("Hi, my name ", max_length=50, truncation=True)
-
-# %%
-from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
-
-model_name = "sshleifer/tiny-gpt2"
-model = AutoModelForCausalLM.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-tokenizer.pad_token = tokenizer.eos_token  # TODO: Padding token and <unk> token (or replace <unk> with something that maps to models UNK token)
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
-dataset = load_dataset("wikitext", "wikitext-2-v1")
-
-def tokenize_dataset(dataset):
-    return tokenizer(dataset["text"], truncation=True)
-tokenized_ds = dataset.map(tokenize_dataset, batched=True)
-
-training_args = TrainingArguments(
-    output_dir="tiny-gpt2-wikitext",
-    learning_rate=2e-5,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
-    num_train_epochs=2,
-    push_to_hub=True,
-)
-
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=tokenized_ds["train"],
-    eval_dataset=tokenized_ds["test"],
-    # tokenizer=tokenizer,
-    data_collator=data_collator,
-)
-
-# %%
-trainer.train()
-
-# %%
-tokenizer(["Hello", " world", "Hello world"], padding=True, truncation=True)
-
-# %%
-tokenizer.model_max_length
-
-# %%
-dataset
-
-# %%
-tokenized_ds
-
-# %%
-
-# %%
 dataset = load_dataset("wikitext", "wikitext-2-v1")
 
 # %%
@@ -96,9 +25,6 @@ for i in range(10):
 
 # %%
 tokenizer([dataset["train"][i]["text"] for i in range(10)], padding=True, truncation=True, max_length=10)
-
-# %%
-max(len(dataset["train"][i]["text"]) for i in range(10))
 
 # %%
 max(len(tokens) for tokens in tokenizer([dataset["train"][i]["text"] for i in range(len(dataset["train"]))])["input_ids"])
@@ -110,15 +36,11 @@ len(dataset["train"])
 dataset
 
 # %%
-tokenized_ds
-
-# %%
 from transformers import AutoTokenizer
 
 context_length = 2
 tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")  # TODO: Replace by simpler tokenizer?
 
-# %%
 outputs = tokenizer(
     dataset["train"][:2]["text"],
     truncation=True,
@@ -163,6 +85,7 @@ tokenizer
 # %%
 from transformers import AutoTokenizer, GPT2LMHeadModel, AutoConfig
 
+# TODO: Start smaller
 config = AutoConfig.from_pretrained(
     "gpt2",
     vocab_size=len(tokenizer),
