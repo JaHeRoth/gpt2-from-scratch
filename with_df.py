@@ -120,15 +120,47 @@ for key in out:
 dataset
 
 # %%
+from transformers import TrainerCallback
+import torch
+
+class GenerateTextCallback(TrainerCallback):
+    def __init__(self, tokenizer, prompt="Once upon a time", device=None, every_n_steps=5):
+        self.tokenizer = tokenizer
+        self.prompt = prompt
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.every_n_steps = every_n_steps
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step % self.every_n_steps == 0:
+            model = kwargs["model"]
+            model.eval()
+            tokenized = self.tokenizer(self.prompt, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                output_ids = model.generate(
+                    **tokenized,
+                    max_new_tokens=50,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_k=50,
+                    top_p=0.95,
+                    no_repeat_ngram_size=2,
+                    early_stopping=True,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+            output_text = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
+            print(f"[Step {state.global_step}] Generated text:\n{output_text}")
+
+
+# %%
 from transformers import Trainer, TrainingArguments
 
 args = TrainingArguments(
     output_dir="mygpt2",
     per_device_train_batch_size=32,
     per_device_eval_batch_size=32,
-    # evaluation_strategy="steps",
+    eval_strategy="steps",
     eval_steps=50,
-    logging_steps=50,
+    logging_steps=10,
     gradient_accumulation_steps=8,
     max_steps=100,
     weight_decay=0.1,
@@ -140,6 +172,11 @@ args = TrainingArguments(
     push_to_hub=True,
 )
 
+tokenizer.pad_token = tokenizer.eos_token
+generate_callback = GenerateTextCallback(
+    tokenizer=tokenizer, prompt="Once upon a time", every_n_steps=5
+)
+
 trainer = Trainer(
     model=model,
     # tokenizer=tokenizer,
@@ -147,6 +184,7 @@ trainer = Trainer(
     data_collator=data_collator,
     train_dataset=tokenized_ds["train"],
     eval_dataset=tokenized_ds["validation"],
+    callbacks=[generate_callback],
 )
 
 # %%
