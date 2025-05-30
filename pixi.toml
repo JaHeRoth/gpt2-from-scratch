@@ -7,8 +7,10 @@ version = "0.1.0"
 
 [tasks]
 
+[system-requirements]
+cuda = "12.8"
+
 [dependencies]
-pytorch = ">=2.6.0,<3"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 tqdm = ">=4.67.1,<5"
 torchvision = ">=0.21.0,<0.22"
@@ -27,3 +29,9 @@ timm = ">=1.0.15,<2"
 jupyter = ">=1.1.1,<2"
 huggingface_hub = ">=0.30.2,<0.31"
 jupytext = ">=1.17.1,<2"
+
+[target.linux-64.dependencies]
+pytorch-gpu = "*"
+
+[target.osx-arm64.dependencies]
+pytorch = ">=2.6.0,<3"
