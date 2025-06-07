@@ -4,6 +4,7 @@ runs
 .ipynb_checkpoints
 mygpt2
 tokenized-wiki-ds.hf
+cl20-tokenized-wiki-ds.hf
 
 # pixi environments
 .pixi
