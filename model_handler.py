@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -62,6 +64,8 @@ def train(
     log_period: int = 25,
     stream_period: int = 100,
     eval_period: int = 250,
+    checkpoint_period: int = 50,
+    checkpoint_path: Path | None = None,
     stream_prompt: str = "In 1814, the",
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
@@ -138,6 +142,12 @@ def train(
                     eval_losses.append(avg_val_loss.item())
                     print(f"Avg. validation Loss {avg_val_loss.item()}")
                     model.train()
+
+            if batch_i % checkpoint_period == 0 and checkpoint_path is not None:
+                checkpoint_path.mkdir(parents=True, exist_ok=True)
+                path = checkpoint_path / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
+                print(f"Saving state dict checkpoint to '{path}'.")
+                torch.save(model.state_dict(), path)
 
         print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
 
