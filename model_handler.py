@@ -1,5 +1,10 @@
 import torch
+from torch import nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def nucleus_sample(probits: torch.Tensor, prob_threshold: float):
@@ -42,3 +47,109 @@ def print_stream(
             break
         print(tokenizer.decode(token), end="", flush=True)
     print("", flush=True)
+
+
+def train(
+    model,
+    optimizer,
+    tokenizer,
+    tokenized_train_ds,
+    tokenized_eval_ds,
+    device,
+    train_batch_size: int = 64,
+    num_epochs: int = 100,
+    warmup_steps: int = 2000,
+    log_period: int = 25,
+    stream_period: int = 100,
+    eval_period: int = 250,
+    stream_prompt: str = "In 1814, the",
+) -> tuple[list[float], list[float]]:
+    """Trains `model` (in-place) and returns training and eval losses."""
+
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs")
+        model = nn.DataParallel(model)
+
+    train_dl = DataLoader(
+        tokenized_train_ds,
+        batch_size=train_batch_size,
+        shuffle=True,
+        collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
+    )
+    validation_dl = DataLoader(
+        tokenized_eval_ds,
+        batch_size=train_batch_size * 2,
+        shuffle=False,
+        collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
+    )
+
+    total_steps = num_epochs * len(train_dl)
+    decay_steps = total_steps - warmup_steps
+    scheduler = SequentialLR(
+        optimizer=optimizer,
+        schedulers=[
+            LinearLR(optimizer, start_factor=1.0 / warmup_steps, end_factor=1.0, total_iters=warmup_steps),
+            CosineAnnealingLR(optimizer, T_max=decay_steps, eta_min=0.0),
+        ],
+        milestones=[warmup_steps],
+    )
+
+    model.train()
+    train_losses = []
+    eval_losses = []
+    for epoch_i in range(num_epochs):
+        for batch_i, batch in enumerate(train_dl):
+            X: torch.Tensor = batch.input_ids.to(device)[:, :-1].contiguous()
+            y: torch.Tensor = batch.input_ids.to(device)[:, 1:].contiguous()
+            logits = model(X)
+            loss = nn.functional.cross_entropy(
+                logits.view(-1, logits.shape[-1]),
+                y.view(-1),
+                ignore_index=tokenizer.pad_token_id,
+            )
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            scheduler.step()
+
+            if batch_i % log_period == 0:
+                train_losses.append(loss.item())
+                print(f"Batch {batch_i + 1}/{len(train_dl)} in epoch {epoch_i + 1}/{num_epochs}: Loss {loss.item()}")
+
+            if batch_i % stream_period == 0:
+                model.eval()
+                print_stream(model=model, tokenizer=tokenizer, prompt=stream_prompt, device=device, max_length=50)
+                print("", flush=True)
+                model.train()
+
+            if batch_i % eval_period == 0:
+                with torch.no_grad():
+                    model.eval()
+                    avg_val_loss = torch.Tensor([0.0]).to(device)
+                    for validation_batch in validation_dl:
+                        X_val: torch.Tensor = validation_batch.input_ids.to(device)[:, :-1].contiguous()
+                        y_val: torch.Tensor = validation_batch.input_ids.to(device)[:, 1:].contiguous()
+                        val_logits = model(X_val)
+                        avg_val_loss += nn.functional.cross_entropy(
+                            val_logits.view(-1, val_logits.shape[-1]),
+                            y_val.view(-1),
+                            ignore_index=tokenizer.pad_token_id,
+                        ) / len(validation_dl)
+                    eval_losses.append(avg_val_loss.item())
+                    print(f"Avg. validation Loss {avg_val_loss.item()}")
+                    model.train()
+
+        print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
+
+        train_loss_batch_i = np.arange(len(train_losses)) * log_period
+        eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
+        plt.plot(train_loss_batch_i, train_losses, "--o", label="Train Loss")
+        plt.plot(eval_loss_batch_i, eval_losses, "--o", label="Eval Loss")
+        plt.xlabel("Batch number")
+        plt.ylabel("Loss")
+        plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+    return train_losses, eval_losses
