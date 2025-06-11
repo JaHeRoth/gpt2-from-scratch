@@ -1,10 +1,10 @@
-from data_handler import load_preprocessed
+from utilities.data_handler import load_preprocessed
 from transformers import AutoTokenizer
 import torch
 import time
 from pathlib import Path
-from model_handler import train
-from models import MyGPT
+from utilities.model_handler import train
+from utilities.models import MyGPT
 
 
 def run():
