@@ -69,7 +69,6 @@ def cleanup():
 def worker(rank, world_size, tokenizer, tokenized_ds):
     setup(rank, world_size)
     device = torch.device(f"cuda:{rank}")
-    tokenized_ds = tokenized_ds.to(device)
     # Using hyperparams of GPT paper (although we use a different dataset)
     model = MyGPT(
         d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size, device=device
