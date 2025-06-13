@@ -71,19 +71,27 @@ def train(
     """Trains `model` (in-place) and returns training and eval losses."""
 
     if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs")
-        model = nn.DataParallel(model)
+        model = nn.parallel.DistributedDataParallel(model)
+
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        tokenized_train_ds,
+        shuffle=True,
+    )
+    validation_sampler = torch.utils.data.distributed.DistributedSampler(
+        tokenized_eval_ds,
+        shuffle=False,
+    )
 
     train_dl = DataLoader(
         tokenized_train_ds,
         batch_size=train_batch_size,
-        shuffle=True,
+        sampler=train_sampler,
         collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
     )
     validation_dl = DataLoader(
         tokenized_eval_ds,
         batch_size=train_batch_size * 2,
-        shuffle=False,
+        sampler=validation_sampler,
         collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
     )
 
@@ -102,6 +110,8 @@ def train(
     train_losses = []
     eval_losses = []
     for epoch_i in range(num_epochs):
+        train_sampler.set_epoch(epoch_i)
+        validation_sampler.set_epoch(epoch_i)
         for batch_i, batch in enumerate(train_dl):
             X: torch.Tensor = batch.input_ids.to(device)[:, :-1].contiguous()
             y: torch.Tensor = batch.input_ids.to(device)[:, 1:].contiguous()
