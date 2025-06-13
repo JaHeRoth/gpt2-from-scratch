@@ -61,9 +61,9 @@ def train(
     train_batch_size: int = 64,
     num_epochs: int = 100,
     warmup_steps: int = 2000,
-    log_period: int = 25,
-    stream_period: int = 100,
-    eval_period: int = 250,
+    log_period: int | None = 25,
+    stream_period: int | None = 100,
+    eval_period: int | None = 250,
     checkpoint_period: int = 50,
     checkpoint_path: Path | None = None,
     stream_prompt: str = "In 1814, the",
@@ -77,10 +77,6 @@ def train(
         tokenized_train_ds,
         shuffle=True,
     )
-    validation_sampler = torch.utils.data.distributed.DistributedSampler(
-        tokenized_eval_ds,
-        shuffle=False,
-    )
 
     train_dl = DataLoader(
         tokenized_train_ds,
@@ -91,7 +87,7 @@ def train(
     validation_dl = DataLoader(
         tokenized_eval_ds,
         batch_size=train_batch_size * 2,
-        sampler=validation_sampler,
+        shuffle=False,
         collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
     )
 
@@ -111,7 +107,6 @@ def train(
     eval_losses = []
     for epoch_i in range(num_epochs):
         train_sampler.set_epoch(epoch_i)
-        validation_sampler.set_epoch(epoch_i)
         for batch_i, batch in enumerate(train_dl):
             X: torch.Tensor = batch.input_ids.to(device)[:, :-1].contiguous()
             y: torch.Tensor = batch.input_ids.to(device)[:, 1:].contiguous()
@@ -126,17 +121,17 @@ def train(
             optimizer.zero_grad()
             scheduler.step()
 
-            if batch_i % log_period == 0:
+            if log_period is not None and batch_i % log_period == 0:
                 train_losses.append(loss.item())
                 print(f"Batch {batch_i + 1}/{len(train_dl)} in epoch {epoch_i + 1}/{num_epochs}: Loss {loss.item()}")
 
-            if batch_i % stream_period == 0:
+            if stream_period is not None and batch_i % stream_period == 0:
                 model.eval()
                 print_stream(model=model, tokenizer=tokenizer, prompt=stream_prompt, device=device, max_length=50)
                 print("", flush=True)
                 model.train()
 
-            if batch_i % eval_period == 0:
+            if eval_period is not None and batch_i % eval_period == 0:
                 with torch.no_grad():
                     model.eval()
                     avg_val_loss = torch.Tensor([0.0]).to(device)

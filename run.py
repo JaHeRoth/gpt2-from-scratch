@@ -87,7 +87,11 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         tokenized_train_ds=tokenized_ds["train"],
         tokenized_eval_ds=tokenized_ds["validation"],
         device=device,
-        checkpoint_path=None,  # TODO: Figure out how to save checkpoints in a distributed setting
+        # We disable these for all but rank 0, to avoid cluttering the output
+        checkpoint_path=Path(f"checkpoints/{int(time.time())}") if rank == 0 else None,
+        log_period=50 if rank == 0 else None,
+        stream_period=250 if rank == 0 else None,
+        eval_period=1000 if rank == 0 else None,
     )
 
 
