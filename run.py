@@ -1,6 +1,9 @@
 from utilities.data_handler import load_preprocessed
 from transformers import AutoTokenizer
 import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
 import time
 from pathlib import Path
 from utilities.model_handler import train
@@ -45,5 +48,14 @@ def run():
     )
 
 
+def worker(rank, n_gpus):
+    print("=" * 80 + f"{rank=}\n{n_gpus=}")
+
+
+def distributed_run():
+    n_gpus = torch.cuda.device_count()
+    mp.spawn(worker, nprocs=n_gpus, args=(n_gpus,))
+
 if __name__ == "__main__":
     run()
+    # distributed_run()
