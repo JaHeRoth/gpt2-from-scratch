@@ -87,6 +87,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         tokenized_train_ds=tokenized_ds["train"],
         tokenized_eval_ds=tokenized_ds["validation"],
         device=device,
+        train_batch_size=32,
         # We disable these for all but rank 0, to avoid cluttering the output
         checkpoint_path=Path(f"checkpoints/{int(time.time())}") if rank == 0 else None,
         log_period=50 if rank == 0 else None,
