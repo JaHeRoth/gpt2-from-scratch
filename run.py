@@ -43,7 +43,6 @@ def run():
         eps=1e-9,
         lr=2.5e-4,
     )
-    # TODO: DistributedDataParallel instead of DataParallel
     train(
         model=model,
         optimizer=optimizer,
@@ -89,6 +88,8 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         device=device,
         train_batch_size=32,
         # We disable these for all but rank 0, to avoid cluttering the output
+        # TODO: Rather pass run_id, and then disable checkpointing by passing chceckpoint_period=None
+        #  Can then also enable saving of loss curve plots
         checkpoint_path=Path(f"checkpoints/{int(time.time())}") if rank == 0 else None,
         log_period=50 if rank == 0 else None,
         stream_period=250 if rank == 0 else None,
@@ -103,6 +104,6 @@ def distributed_run():
     mp.spawn(worker, nprocs=n_gpus, args=(n_gpus, tokenizer, tokenized_ds))
 
 if __name__ == "__main__":
-    # TODO: Unify these somehow
+    # TODO: Unify these somehow (or at least reduce code duplication between them)
     # run()
     distributed_run()
