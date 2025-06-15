@@ -65,7 +65,7 @@ def train(
     stream_period: int | None = 100,
     eval_period: int | None = 250,
     checkpoint_period: int = 50,
-    checkpoint_path: Path | None = None,
+    run_id: str = None,
     stream_prompt: str = "In 1814, the",
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
@@ -148,7 +148,8 @@ def train(
                     print(f"Avg. validation Loss {avg_val_loss.item()}")
                     model.train()
 
-            if batch_i % checkpoint_period == 0 and checkpoint_path is not None:
+            if checkpoint_period is not None and batch_i % checkpoint_period == 0:
+                checkpoint_path = Path(f"checkpoints/{run_id}")
                 checkpoint_path.mkdir(parents=True, exist_ok=True)
                 path = checkpoint_path / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
                 print(f"Saving state dict checkpoint to '{path}'.")
@@ -165,6 +166,7 @@ def train(
         plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
         plt.legend()
         plt.grid()
+        # TODO: Savefig
         plt.show()
 
     return train_losses, eval_losses

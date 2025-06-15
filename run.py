@@ -60,13 +60,12 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         tokenized_eval_ds=tokenized_ds["validation"],
         device=device,  # TODO: Can we skip passing device, and bet on default device being correct in mp.spawn?
         train_batch_size=32,
+        run_id=str(int(time.time())),
         # We disable these for all but rank 0, to avoid cluttering the output
-        # TODO: Rather pass run_id, and then disable checkpointing by passing checkpoint_period=None
-        #  Can then also enable saving of loss curve plots
-        checkpoint_path=Path(f"checkpoints/{int(time.time())}") if rank == 0 else None,
         log_period=50 if rank == 0 else None,
         stream_period=250 if rank == 0 else None,
         eval_period=1000 if rank == 0 else None,
+        checkpoint_period=100 if rank == 0 else None,
     )
 
     cleanup()
