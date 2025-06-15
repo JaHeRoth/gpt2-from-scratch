@@ -69,10 +69,6 @@ def train(
     stream_prompt: str = "In 1814, the",
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
-
-    # if torch.cuda.device_count() > 1:
-    #     model = nn.parallel.DistributedDataParallel(model)
-
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         tokenized_train_ds,
         shuffle=True,
@@ -166,7 +162,8 @@ def train(
         plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
         plt.legend()
         plt.grid()
-        # TODO: Savefig
+        plt.savefig(f"plots/{run_id}__epoch_{epoch_i}.png", bbox_inches="tight")
         plt.show()
+        plt.clf()
 
     return train_losses, eval_losses
