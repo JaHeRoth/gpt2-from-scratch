@@ -5,6 +5,8 @@ runs
 mygpt2
 tokenized-wiki-ds.hf
 cl20-tokenized-wiki-ds.hf
+checkpoints
+plots
 
 # pixi environments
 .pixi

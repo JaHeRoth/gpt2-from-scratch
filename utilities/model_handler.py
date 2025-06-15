@@ -69,6 +69,11 @@ def train(
     stream_prompt: str = "In 1814, the",
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
+    plot_dir = Path(f"outputs/plots/{run_id}")
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = Path(f"outputs/checkpoints/{run_id}")
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         tokenized_train_ds,
         shuffle=True,
@@ -145,9 +150,7 @@ def train(
                     model.train()
 
             if checkpoint_period is not None and batch_i % checkpoint_period == 0:
-                checkpoint_path = Path(f"checkpoints/{run_id}")
-                checkpoint_path.mkdir(parents=True, exist_ok=True)
-                path = checkpoint_path / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
+                path = checkpoint_dir / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
                 print(f"Saving state dict checkpoint to '{path}'.")
                 torch.save(model.state_dict(), path)
 
@@ -162,7 +165,7 @@ def train(
         plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
         plt.legend()
         plt.grid()
-        plt.savefig(f"plots/{run_id}__epoch_{epoch_i}.png", bbox_inches="tight")
+        plt.savefig(plot_dir / f"epoch_{epoch_i}.png", bbox_inches="tight")
         plt.show()
         plt.clf()
 
