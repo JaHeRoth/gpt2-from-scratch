@@ -70,8 +70,8 @@ def train(
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
 
-    if torch.cuda.device_count() > 1:
-        model = nn.parallel.DistributedDataParallel(model)
+    # if torch.cuda.device_count() > 1:
+    #     model = nn.parallel.DistributedDataParallel(model)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         tokenized_train_ds,

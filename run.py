@@ -24,41 +24,11 @@ def prep():
     return tokenizer, tokenized_ds
 
 
-def run():
-    device = (
-        torch.device("cuda")
-        if torch.cuda.is_available()
-        else torch.device("cpu")
-    )
-    print(f"{device=}")
-
-    tokenizer, tokenized_ds = prep()
-
-    # Using hyperparams of GPT paper (although we use a different dataset)
-    model = MyGPT(d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size,
-                  device=device)
-    optimizer = torch.optim.Adam(
-        params=model.parameters(),
-        betas=(0.9, 0.98),
-        eps=1e-9,
-        lr=2.5e-4,
-    )
-    train(
-        model=model,
-        optimizer=optimizer,
-        tokenizer=tokenizer,
-        tokenized_train_ds=tokenized_ds["train"],
-        tokenized_eval_ds=tokenized_ds["validation"],
-        device=device,
-        # TODO: Consider renaming from checkpoint, to avoid confusion with torch.util.checkpoint?
-        checkpoint_path=Path(f"checkpoints/{int(time.time())}"),
-    )
-
-
 def setup(rank, world_size):
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # where rank 0 lives
     os.environ["MASTER_PORT"] = "29500"  # any free port
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
+    dist.init_process_group(backend=backend, rank=rank, world_size=world_size)
 
 
 def cleanup():
@@ -67,12 +37,15 @@ def cleanup():
 
 def worker(rank, world_size, tokenizer, tokenized_ds):
     setup(rank, world_size)
-    device = torch.device(f"cuda:{rank}")
+    device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+
     # Using hyperparams of GPT paper (although we use a different dataset)
     model = MyGPT(
         d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size, device=device
     )
-    model = DDP(model, device_ids=[rank])
+    if world_size > 1 and torch.cuda.is_available():
+        model = DDP(model, device_ids=[rank])
+
     optimizer = torch.optim.Adam(
         params=model.parameters(),
         betas=(0.9, 0.98),
@@ -85,10 +58,10 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         tokenizer=tokenizer,
         tokenized_train_ds=tokenized_ds["train"],
         tokenized_eval_ds=tokenized_ds["validation"],
-        device=device,
+        device=device,  # TODO: Can we skip passing device, and bet on default device being correct in mp.spawn?
         train_batch_size=32,
         # We disable these for all but rank 0, to avoid cluttering the output
-        # TODO: Rather pass run_id, and then disable checkpointing by passing chceckpoint_period=None
+        # TODO: Rather pass run_id, and then disable checkpointing by passing checkpoint_period=None
         #  Can then also enable saving of loss curve plots
         checkpoint_path=Path(f"checkpoints/{int(time.time())}") if rank == 0 else None,
         log_period=50 if rank == 0 else None,
@@ -96,14 +69,20 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         eval_period=1000 if rank == 0 else None,
     )
 
+    cleanup()
 
-def distributed_run():
+
+def run():
     tokenizer, tokenized_ds = prep()
-    n_gpus = torch.cuda.device_count()
-    print(f"Using {n_gpus} GPUs")
-    mp.spawn(worker, nprocs=n_gpus, args=(n_gpus, tokenizer, tokenized_ds))
+
+    if torch.cuda.is_available():
+        world_size = torch.cuda.device_count()
+        print(f"Running on {world_size} GPUs")
+    else:
+        world_size = 1
+        print(f"Running on a single CPU")
+
+    mp.spawn(worker, nprocs=world_size, args=(world_size, tokenizer, tokenized_ds))
 
 if __name__ == "__main__":
-    # TODO: Unify these somehow (or at least reduce code duplication between them)
-    # run()
-    distributed_run()
+    run()
