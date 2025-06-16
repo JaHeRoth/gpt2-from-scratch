@@ -71,7 +71,7 @@ def train(
     """Trains `model` (in-place) and returns training and eval losses."""
     plot_dir = Path(f"outputs/plots/{run_id}")
     plot_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_dir = Path(f"outputs/checkpoints/{run_id}")
+    checkpoint_dir = Path(f"outputs/model_checkpoints/{run_id}")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(
