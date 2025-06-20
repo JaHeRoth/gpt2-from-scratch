@@ -51,7 +51,7 @@ class TransformerEncoderGPT(nn.Module):
             ),
             num_layers=num_layers,
         )
-        self.decoder = nn.Linear(d_model, vocab_size, device=device)
+        self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
         self.decoder.weight = self.token_embedder.weight
 
     def forward(self, input_ids: torch.Tensor):
