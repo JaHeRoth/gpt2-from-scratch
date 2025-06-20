@@ -50,6 +50,7 @@ class TransformerEncoderGPT(nn.Module):
                 d_model=d_model,
                 nhead=nhead,
                 dim_feedforward=dim_feedforward,
+                activation="gelu",
                 device=device,
                 batch_first=True,
                 norm_first=False,
