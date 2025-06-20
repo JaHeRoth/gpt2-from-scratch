@@ -66,8 +66,20 @@ class TransformerEncoderGPT(nn.Module):
             ),
             num_layers=num_layers,
         )
+        self.apply(self.init_weights)
         self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
         self.decoder.weight = self.token_embedder.weight
+
+    @staticmethod
+    def init_weights(m):
+        # self_attn.out_proj isinstance nn.Linear
+        if isinstance(m, (nn.Linear, nn.Embedding)):
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+            if getattr(m, "bias", None) is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.ones_(m.weight)
+            nn.init.zeros_(m.bias)
 
     def forward(self, input_ids: torch.Tensor):
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_ids)
