@@ -10,13 +10,13 @@ from pathlib import Path
 from utilities.model_handler import train
 from utilities.models import TransformerEncoderGPT
 
+context_length = 128
 
 def prep():
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
     # TODO: Use BooksCorpus dataset and context_length=512 (what was used in GPT paper)
-    context_length = 128
     _, tokenized_ds = load_preprocessed(
         hf_path="wikitext", hf_name="wikitext-103-v1", tokenizer=tokenizer, context_length=context_length
     )
@@ -41,7 +41,13 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
 
     # Using hyperparams of GPT paper (although we use a different dataset)
     model = TransformerEncoderGPT(
-        d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size, device=device
+        d_model=768,
+        nhead=12,
+        num_layers=12,
+        dim_feedforward=3072,
+        vocab_size=tokenizer.vocab_size,
+        context_length=context_length,
+        device=device,
     )
     # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
     model = DDP(

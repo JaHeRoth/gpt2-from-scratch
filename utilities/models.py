@@ -42,6 +42,7 @@ class TransformerEncoderGPT(nn.Module):
         num_layers: int,
         dim_feedforward: int,
         vocab_size: int,
+        context_length: int,
         device,
     ):
         super().__init__()
@@ -51,8 +52,9 @@ class TransformerEncoderGPT(nn.Module):
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
         )
         nn.init.normal_(self.token_embedder.weight, mean=0.0, std=0.02)
-        # TODO: Replace with learned positional embeddings, like in GPT paper
-        self.positional_embedder = PositionalEmbedding(embedding_dim=d_model)
+        self.positional_embedder = nn.Embedding(
+            num_embeddings=context_length, embedding_dim=d_model, device=device
+        )
         self.transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=d_model,
@@ -81,7 +83,8 @@ class TransformerEncoderGPT(nn.Module):
             nn.init.zeros_(m.bias)
 
     def forward(self, input_ids: torch.Tensor):
-        embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_ids)
+        input_idx = torch.arange(input_ids.shape[1]).unsqueeze(0).expand_as(input_ids)
+        embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
             mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
