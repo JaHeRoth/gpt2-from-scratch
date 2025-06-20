@@ -59,7 +59,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         tokenized_train_ds=tokenized_ds["train"],
         tokenized_eval_ds=tokenized_ds["validation"],
         device=device,  # TODO: Can we skip passing device, and bet on default device being correct in mp.spawn?
-        train_batch_size=96,
+        train_batch_size=128,
         run_id=str(int(time.time())),
         # We disable these for all but rank 0, to avoid cluttering the output
         log_period=50 if rank == 0 else None,
