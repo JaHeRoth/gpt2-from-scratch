@@ -82,7 +82,7 @@ class TransformerEncoderGPT(nn.Module):
             nn.init.zeros_(m.bias)
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx = torch.arange(input_ids.shape[1]).unsqueeze(0).expand_as(input_ids)
+        input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
