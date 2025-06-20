@@ -44,6 +44,7 @@ class TransformerEncoderGPT(nn.Module):
         )
         nn.init.normal_(self.token_embedder.weight, mean=0.0, std=0.02)
         # TODO: Initialize rest of weights like for GPT
+        # TODO: Replace with learned positional embeddings, like in GPT paper
         self.positional_embedder = PositionalEmbedding(embedding_dim=d_model)
         self.transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(

@@ -54,6 +54,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         betas=(0.9, 0.98),
         eps=1e-9,
         lr=2.5e-4,
+        # TODO: Regularization like in GPT paper (maybe using weight_decay)
     )
     train(
         model=model,
