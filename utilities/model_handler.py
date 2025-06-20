@@ -167,7 +167,7 @@ def train(
         plt.yscale("log")
         plt.legend()
         plt.grid()
-        plt.savefig(plot_dir / f"epoch_{epoch_i}.png", bbox_inches="tight")
+        plt.savefig(plot_dir / f"epoch_{epoch_i + 1}.png", bbox_inches="tight")
         plt.show()
         plt.clf()
 
