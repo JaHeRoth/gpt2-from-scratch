@@ -35,7 +35,15 @@ class PositionalEmbedding(nn.Module):
 
 
 class TransformerEncoderGPT(nn.Module):
-    def __init__(self, d_model: int, nhead: int, num_layers: int, dim_feedforward: int, vocab_size: int, device):
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        num_layers: int,
+        dim_feedforward: int,
+        vocab_size: int,
+        device,
+    ):
         super().__init__()
         self.d_model = d_model
         self.device = device
