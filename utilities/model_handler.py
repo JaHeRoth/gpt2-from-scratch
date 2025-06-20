@@ -119,6 +119,7 @@ def train(
                 ignore_index=tokenizer.pad_token_id,
             )
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
