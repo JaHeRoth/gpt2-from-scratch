@@ -32,7 +32,7 @@ class PositionalEmbedding(nn.Module):
             return embeddings.unsqueeze(0).expand(input_ids.shape[0], -1, -1)
 
 
-class MyGPT(nn.Module):
+class TransformerEncoderGPT(nn.Module):
     def __init__(self, d_model: int, nhead: int, num_layers: int, dim_feedforward: int, vocab_size: int, device):
         super().__init__()
         self.device = device

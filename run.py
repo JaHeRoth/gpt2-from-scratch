@@ -8,7 +8,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import time
 from pathlib import Path
 from utilities.model_handler import train
-from utilities.models import MyGPT
+from utilities.models import TransformerEncoderGPT
 
 
 def prep():
@@ -40,7 +40,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
 
     # Using hyperparams of GPT paper (although we use a different dataset)
-    model = MyGPT(
+    model = TransformerEncoderGPT(
         d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size, device=device
     )
     if world_size > 1 and torch.cuda.is_available():
