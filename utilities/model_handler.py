@@ -163,6 +163,8 @@ def train(
         plt.xlabel("Batch number")
         plt.ylabel("Loss")
         plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
+        plt.xscale("log")
+        plt.yscale("log")
         plt.legend()
         plt.grid()
         plt.savefig(plot_dir / f"epoch_{epoch_i}.png", bbox_inches="tight")

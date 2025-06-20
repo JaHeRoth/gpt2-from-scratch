@@ -67,7 +67,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         # We disable these for all but rank 0, to avoid cluttering the output
         log_period=50 if rank == 0 else None,
         stream_period=250 if rank == 0 else None,
-        eval_period=1000 if rank == 0 else None,
+        eval_period=500 if rank == 0 else None,
         checkpoint_period=100 if rank == 0 else None,
     )
 
