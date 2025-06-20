@@ -1,3 +1,5 @@
+from math import sqrt
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -35,6 +37,7 @@ class PositionalEmbedding(nn.Module):
 class TransformerEncoderGPT(nn.Module):
     def __init__(self, d_model: int, nhead: int, num_layers: int, dim_feedforward: int, vocab_size: int, device):
         super().__init__()
+        self.d_model = d_model
         self.device = device
         self.token_embedder = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
@@ -55,7 +58,7 @@ class TransformerEncoderGPT(nn.Module):
         self.decoder.weight = self.token_embedder.weight
 
     def forward(self, input_ids: torch.Tensor):
-        embedded = self.token_embedder(input_ids) + self.positional_embedder(input_ids)
+        embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_ids)
         transformed = self.transformer(
             embedded.permute(1, 0, 2),  # Transformer expects (seq_len, batch_size, features)
             mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
