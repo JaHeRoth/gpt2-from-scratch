@@ -158,8 +158,8 @@ def train(
 
         train_loss_batch_i = np.arange(len(train_losses)) * log_period
         eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
-        plt.plot(train_loss_batch_i, train_losses, "--o", label="Train Loss")
-        plt.plot(eval_loss_batch_i, eval_losses, "--o", label="Eval Loss")
+        plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
+        plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
         plt.xlabel("Batch number")
         plt.ylabel("Loss")
         plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
