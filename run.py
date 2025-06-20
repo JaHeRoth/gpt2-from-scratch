@@ -43,8 +43,11 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
     model = TransformerEncoderGPT(
         d_model=768, nhead=12, num_layers=12, dim_feedforward=3072, vocab_size=tokenizer.vocab_size, device=device
     )
-    if world_size > 1 and torch.cuda.is_available():
-        model = DDP(model, device_ids=[rank])
+    # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
+    model = DDP(
+        model,
+        device_ids=[rank] if torch.cuda.is_available() else None,
+    )
 
     optimizer = torch.optim.Adam(
         params=model.parameters(),

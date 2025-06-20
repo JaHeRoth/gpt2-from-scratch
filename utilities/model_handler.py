@@ -152,7 +152,7 @@ def train(
             if checkpoint_period is not None and batch_i % checkpoint_period == 0:
                 path = checkpoint_dir / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
                 print(f"Saving state dict checkpoint to '{path}'.")
-                torch.save(model.state_dict(), path)
+                torch.save(model.module.state_dict(), path)
 
         print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
 
