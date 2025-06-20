@@ -58,12 +58,13 @@ def train(
     tokenized_train_ds,
     tokenized_eval_ds,
     device,
+    make_outputs: bool,
     train_batch_size: int = 64,
     num_epochs: int = 100,
     warmup_steps: int = 2000,
-    log_period: int | None = 25,
-    stream_period: int | None = 100,
-    eval_period: int | None = 250,
+    log_period: int = 25,
+    stream_period: int = 100,
+    eval_period: int = 250,
     checkpoint_period: int = 50,
     run_id: str = None,
     stream_prompt: str = "In 1814, the",
@@ -122,17 +123,17 @@ def train(
             optimizer.zero_grad()
             scheduler.step()
 
-            if log_period is not None and batch_i % log_period == 0:
+            if make_outputs and batch_i % log_period == 0:
                 train_losses.append(loss.item())
                 print(f"Batch {batch_i + 1}/{len(train_dl)} in epoch {epoch_i + 1}/{num_epochs}: Loss {loss.item()}")
 
-            if stream_period is not None and batch_i % stream_period == 0:
+            if make_outputs and batch_i % stream_period == 0:
                 model.eval()
                 print_stream(model=model, tokenizer=tokenizer, prompt=stream_prompt, device=device, max_length=50)
                 print("", flush=True)
                 model.train()
 
-            if eval_period is not None and batch_i % eval_period == 0:
+            if make_outputs and batch_i % eval_period == 0:
                 with torch.no_grad():
                     model.eval()
                     avg_val_loss = torch.Tensor([0.0]).to(device)
@@ -149,26 +150,27 @@ def train(
                     print(f"Avg. validation Loss {avg_val_loss.item()}")
                     model.train()
 
-            if checkpoint_period is not None and batch_i % checkpoint_period == 0:
+            if make_outputs and batch_i % checkpoint_period == 0:
                 path = checkpoint_dir / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
                 print(f"Saving state dict checkpoint to '{path}'.")
                 torch.save(model.module.state_dict(), path)
 
-        print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
+        if make_outputs:
+            print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
 
-        train_loss_batch_i = np.arange(len(train_losses)) * log_period
-        eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
-        plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
-        plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
-        plt.xlabel("Batch number")
-        plt.ylabel("Loss")
-        plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
-        plt.xscale("log")
-        plt.yscale("log")
-        plt.legend()
-        plt.grid()
-        plt.savefig(plot_dir / f"epoch_{epoch_i + 1}.png", bbox_inches="tight")
-        plt.show()
-        plt.clf()
+            train_loss_batch_i = np.arange(len(train_losses)) * log_period
+            eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
+            plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
+            plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
+            plt.xlabel("Batch number")
+            plt.ylabel("Loss")
+            plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
+            plt.xscale("log")
+            plt.yscale("log")
+            plt.legend()
+            plt.grid()
+            plt.savefig(plot_dir / f"epoch_{epoch_i + 1}.png", bbox_inches="tight")
+            plt.show()
+            plt.clf()
 
     return train_losses, eval_losses

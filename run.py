@@ -66,10 +66,11 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         train_batch_size=128,
         run_id=str(int(time.time())),
         # We disable these for all but rank 0, to avoid cluttering the output
-        log_period=50 if rank == 0 else None,
-        stream_period=250 if rank == 0 else None,
-        eval_period=500 if rank == 0 else None,
-        checkpoint_period=100 if rank == 0 else None,
+        make_outputs=rank == 0,
+        log_period=50,
+        stream_period=250,
+        eval_period=500,
+        checkpoint_period=100,
     )
 
     cleanup()
