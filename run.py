@@ -49,12 +49,12 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         device_ids=[rank] if torch.cuda.is_available() else None,
     )
 
+    # TODO: Replace with AdamW with weight_decay on all parameters but bias and LayerNorm gain ones, as in GPT paper
     optimizer = torch.optim.Adam(
         params=model.parameters(),
         betas=(0.9, 0.98),
         eps=1e-9,
         lr=2.5e-4,
-        # TODO: Regularization like in GPT paper (maybe using weight_decay)
     )
     train(
         model=model,
