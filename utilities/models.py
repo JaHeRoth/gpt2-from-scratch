@@ -41,10 +41,18 @@ class TransformerEncoderGPT(nn.Module):
         )
         self.positional_embedder = PositionalEmbedding(embedding_dim=d_model)
         self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward, device=device),
+            nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                device=device,
+                batch_first=False,  # TODO: Try flipping this to True and removing permute calls
+                norm_first=False,
+            ),
             num_layers=num_layers,
         )
         self.decoder = nn.Linear(d_model, vocab_size, device=device)
+        self.decoder.weight = self.token_embedder.weight
 
     def forward(self, input_ids: torch.Tensor):
         embedded = self.token_embedder(input_ids) + self.positional_embedder(input_ids)
