@@ -72,7 +72,6 @@ class TransformerEncoderGPT(nn.Module):
 
     @staticmethod
     def init_weights(m):
-        # self_attn.out_proj isinstance nn.Linear
         if isinstance(m, (nn.Linear, nn.Embedding)):
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
             if getattr(m, "bias", None) is not None:
@@ -80,6 +79,11 @@ class TransformerEncoderGPT(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.MultiheadAttention):
+            nn.init.normal_(m.in_proj_weight, mean=0.0, std=0.02)
+            if getattr(m, "in_proj_bias", None) is not None:
+                nn.init.zeros_(m.in_proj_bias)
+            # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
         input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
