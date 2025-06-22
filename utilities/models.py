@@ -81,8 +81,7 @@ class TransformerEncoderGPT(nn.Module):
             nn.init.zeros_(m.bias)
         elif isinstance(m, nn.MultiheadAttention):
             nn.init.normal_(m.in_proj_weight, mean=0.0, std=0.02)
-            if getattr(m, "in_proj_bias", None) is not None:
-                nn.init.zeros_(m.in_proj_bias)
+            nn.init.zeros_(m.in_proj_bias)
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
