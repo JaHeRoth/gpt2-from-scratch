@@ -93,3 +93,64 @@ class TransformerEncoderGPT(nn.Module):
         )
         logits = self.decoder(transformed)
         return logits
+
+
+class TransformerEncoderGPT2(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        num_layers: int,
+        dim_feedforward: int,
+        vocab_size: int,
+        context_length: int,
+        device,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.device = device
+        self.token_embedder = nn.Embedding(
+            num_embeddings=vocab_size, embedding_dim=d_model, device=device
+        )
+        self.positional_embedder = nn.Embedding(
+            num_embeddings=context_length, embedding_dim=d_model, device=device
+        )
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                activation="gelu",
+                device=device,
+                batch_first=True,
+                norm_first=False,
+            ),
+            num_layers=num_layers,
+        )
+        self.apply(self.init_weights)
+        self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
+        self.decoder.weight = self.token_embedder.weight
+
+    @staticmethod
+    def init_weights(m):
+        if isinstance(m, (nn.Linear, nn.Embedding)):
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+            if getattr(m, "bias", None) is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.ones_(m.weight)
+            nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.MultiheadAttention):
+            nn.init.normal_(m.in_proj_weight, mean=0.0, std=0.02)
+            nn.init.zeros_(m.in_proj_bias)
+            # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
+
+    def forward(self, input_ids: torch.Tensor):
+        input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
+        embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
+        transformed = self.transformer(
+            embedded,
+            mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
+        )
+        logits = self.decoder(transformed)
+        return logits
