@@ -108,6 +108,7 @@ class TransformerEncoderGPT2(nn.Module):
     ):
         super().__init__()
         self.d_model = d_model
+        self.num_layers = num_layers
         self.device = device
         self.token_embedder = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
@@ -123,7 +124,7 @@ class TransformerEncoderGPT2(nn.Module):
                 activation="gelu",
                 device=device,
                 batch_first=True,
-                norm_first=False,
+                norm_first=True,
             ),
             num_layers=num_layers,
         )
@@ -131,10 +132,12 @@ class TransformerEncoderGPT2(nn.Module):
         self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
         self.decoder.weight = self.token_embedder.weight
 
-    @staticmethod
-    def init_weights(m):
+    def init_weights(self, m):
         if isinstance(m, (nn.Linear, nn.Embedding)):
-            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+            std = 0.02
+            if isinstance(m, nn.Linear) and m.weight.shape[0] == self.d_model:
+                std /= sqrt(self.num_layers)
+            nn.init.normal_(m.weight, mean=0.0, std=std)
             if getattr(m, "bias", None) is not None:
                 nn.init.zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
