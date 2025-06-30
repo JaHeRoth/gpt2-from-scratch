@@ -13,7 +13,9 @@ from utilities.models import TransformerEncoderGPT2
 context_length = 128
 
 def prep():
+    # TODO: Define UNK and PAD tokens by passing kwargs here
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+    # tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
     tokenizer.pad_token = tokenizer.eos_token
 
     # TODO: Use BooksCorpus dataset and context_length=512 (what was used in GPT paper)
@@ -98,11 +100,12 @@ def run():
     if torch.cuda.is_available():
         world_size = torch.cuda.device_count()
         print(f"Running on {world_size} GPUs")
+        mp.spawn(worker, nprocs=world_size, args=(world_size, tokenizer, tokenized_ds))
     else:
-        world_size = 1
         print(f"Running on a single CPU")
+        # Not running through mp.spawn makes debugging easier
+        worker(rank=0, world_size=1, tokenizer=tokenizer, tokenized_ds=tokenized_ds)
 
-    mp.spawn(worker, nprocs=world_size, args=(world_size, tokenizer, tokenized_ds))
 
 if __name__ == "__main__":
     run()
