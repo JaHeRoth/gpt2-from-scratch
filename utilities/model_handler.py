@@ -23,10 +23,10 @@ def greedy_sample(probits: torch.Tensor):
     return probits.argmax(dim=-1, keepdim=True)
 
 
-def stream(model, input_ids: torch.Tensor, max_length, prob_threshold: float, temperature: float):
+def stream(model, input_ids: torch.Tensor, max_length: int, prob_threshold: float, temperature: float):
     # TODO: KV-cache to avoid quadratic computational complexity in `max_length`
     output_ids = input_ids.clone()
-    for _ in range(max_length):
+    for _ in range(max_length - input_ids.shape[-1]):
         with torch.no_grad():
             next_token_logits = model(output_ids)[:, -1, :]
             # TODO: If repetitions resurface as an issue: repetition_penalty and no_repeat_ngram_size
@@ -38,7 +38,7 @@ def stream(model, input_ids: torch.Tensor, max_length, prob_threshold: float, te
 
 
 def print_stream(
-    model, tokenizer, prompt: str, device, max_length=50, prob_threshold: float = 0.95, temperature: float = 1.0
+    model, tokenizer, prompt: str, device, max_length: int, prob_threshold: float = 0.95, temperature: float = 1.0
 ):
     print(prompt, end="", flush=True)
     input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
@@ -52,9 +52,9 @@ def print_stream(
     print("", flush=True)
 
 
-def _collate_to_tensor(batch):
+def batch_to_tensor(batch, device):
     batch_input_ids = [row["input_ids"] for row in batch]
-    return torch.tensor(batch_input_ids, dtype=torch.int64)
+    return torch.tensor(batch_input_ids, dtype=torch.int64, device=device)
 
 
 def train(
@@ -90,13 +90,13 @@ def train(
         tokenized_train_ds,
         batch_size=train_batch_size,
         sampler=train_sampler,
-        collate_fn=_collate_to_tensor,
+        collate_fn=lambda batch: batch_to_tensor(batch, device),
     )
     validation_dl = DataLoader(
         tokenized_eval_ds,
         batch_size=train_batch_size * 2,
         shuffle=False,
-        collate_fn=_collate_to_tensor,
+        collate_fn=lambda batch: batch_to_tensor(batch, device),
     )
 
     total_steps = num_epochs * len(train_dl)
@@ -136,7 +136,13 @@ def train(
 
             if make_outputs and batch_i % stream_period == 0:
                 model.eval()
-                print_stream(model=model, tokenizer=tokenizer, prompt=stream_prompt, device=device, max_length=50)
+                print_stream(
+                    model=model,
+                    tokenizer=tokenizer,
+                    prompt=stream_prompt,
+                    device=device,
+                    max_length=model.module.context_length,
+                )
                 print("", flush=True)
                 model.train()
 

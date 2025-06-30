@@ -63,10 +63,14 @@ class TransformerEncoderGPT(nn.Module):
         dim_feedforward: int,
         vocab_size: int,
         context_length: int,
+        eos_token_id: int,
         device,
     ):
         super().__init__()
         self.d_model = d_model
+        self.nhead = nhead
+        self.context_length = context_length
+        self.eos_token_id = eos_token_id
         self.device = device
         self.token_embedder = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
@@ -105,11 +109,11 @@ class TransformerEncoderGPT(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
+        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
-            mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
+            mask=mask,
         )
         logits = self.decoder(transformed)
         return logits
@@ -131,6 +135,7 @@ class TransformerEncoderGPT2(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
+        self.context_length = context_length
         self.eos_token_id = eos_token_id
         self.device = device
         self.token_embedder = nn.Embedding(
@@ -191,11 +196,15 @@ class BasicLayersEncoderGPT2(nn.Module):
         dim_feedforward: int,
         vocab_size: int,
         context_length: int,
+        eos_token_id: int,
         device,
     ):
         super().__init__()
         self.d_model = d_model
+        self.nhead = nhead
         self.num_layers = num_layers
+        self.context_length = context_length
+        self.eos_token_id = eos_token_id
         self.device = device
         self.token_embedder = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
@@ -236,11 +245,11 @@ class BasicLayersEncoderGPT2(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
+        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
-            mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
+            mask=mask,
         )
         logits = self.decoder(transformed)
         return logits

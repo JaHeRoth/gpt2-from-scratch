@@ -19,7 +19,6 @@ def tokenize(batch, tokenizer, context_length: int) -> dict[str, list[torch.Tens
         for token_id in input_ids + [tokenizer.eos_token_id]
     ]
     foldable = flattened + [tokenizer.pad_token_id] * ((-len(flattened)) % row_length)
-    # TODO: Precompute attention masks here, to avoid repeating that computation
     return {
         "input_ids": torch.tensor(foldable).view(-1, row_length)
     }
