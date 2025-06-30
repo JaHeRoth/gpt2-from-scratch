@@ -65,6 +65,7 @@ def train(
     tokenized_eval_ds,
     device,
     make_outputs: bool,
+    stream_prompt: str,
     train_batch_size: int = 64,
     num_epochs: int = 100,
     warmup_steps: int = 2000,
@@ -73,7 +74,6 @@ def train(
     eval_period: int = 250,
     checkpoint_period: int = 50,
     run_id: str = None,
-    stream_prompt: str = "In 1814, the",
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
     plot_dir = Path(f"outputs/plots/{run_id}")
