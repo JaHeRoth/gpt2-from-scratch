@@ -15,8 +15,12 @@ context_length = 128
 def prep():
     # TODO: Define UNK and PAD tokens by passing kwargs here
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
-    # tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
-    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.add_special_tokens(
+        {
+            "pad_token": "<|pad|>",
+            "unk_token": "<unk>",  # Because it appears often in the dataset
+        }
+    )
 
     # TODO: Use BooksCorpus dataset and context_length=512 (what was used in GPT paper)
     _, tokenized_ds = load_preprocessed(
@@ -47,7 +51,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         nhead=12,
         num_layers=12,
         dim_feedforward=3072,
-        vocab_size=tokenizer.vocab_size,
+        vocab_size=len(tokenizer),
         context_length=context_length,
         eos_token_id=tokenizer.eos_token_id,
         device=device,
