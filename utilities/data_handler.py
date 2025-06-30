@@ -5,20 +5,23 @@ from datasets import load_dataset, load_from_disk
 
 
 def tokenize(batch, tokenizer, context_length: int) -> dict[str, list[torch.Tensor]]:
-    # TODO: Sequence packing
-    outputs = tokenizer(
-        batch["text"],
-        truncation=True,
-        max_length=context_length,
-        return_overflowing_tokens=True,
-        return_length=True,
-    )
+    # +1 since last token of sequences won't be used as input (since has no next token)
+    row_length = context_length + 1
+    raw_tokenized_batch = tokenizer(batch["text"])
+    filtered = [
+        input_ids
+        for input_ids in raw_tokenized_batch.data["input_ids"]
+        if len(input_ids) != 0
+    ]
+    flattened = [tokenizer.eos_token_id] + [
+        token_id
+        for input_ids in filtered
+        for token_id in input_ids + [tokenizer.eos_token_id]
+    ]
+    foldable = flattened + [tokenizer.pad_token_id] * ((-len(flattened)) % row_length)
+    # TODO: Precompute attention masks here, to avoid repeating that computation
     return {
-        "input_ids": [
-            input_ids
-            for length, input_ids in zip(outputs["length"], outputs["input_ids"])
-            if length == context_length
-        ]
+        "input_ids": torch.tensor(foldable).view(-1, row_length)
     }
 
 

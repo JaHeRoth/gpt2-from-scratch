@@ -4,6 +4,26 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+
+def build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id, nhead):
+    B, L = input_ids.shape
+    raw_idx = torch.arange(L, device=input_ids.device).expand_as(input_ids)
+    last_eos_idx = torch.cummax(
+        torch.where(input_ids == eos_token_id, raw_idx, 0),
+        dim=1
+    ).values
+    relative_idx = raw_idx - last_eos_idx
+
+    segment_id = (input_ids == eos_token_id).cumsum(dim=1)
+    same_segment_mask = segment_id.unsqueeze(2) == segment_id.unsqueeze(1)
+    causal_mask = torch.tril(torch.ones(L, L, dtype=torch.bool, device=input_ids.device))
+    should_attend_mask = same_segment_mask & causal_mask
+    additive_attention_mask = torch.where(should_attend_mask, 0, -torch.inf)
+    multihead_additive_attention_mask = additive_attention_mask.repeat_interleave(nhead, dim=0)
+
+    return relative_idx, multihead_additive_attention_mask
+
+
 class PositionalEmbedding(nn.Module):
     def __init__(self, embedding_dim):
         super().__init__()
@@ -104,11 +124,14 @@ class TransformerEncoderGPT2(nn.Module):
         dim_feedforward: int,
         vocab_size: int,
         context_length: int,
+        eos_token_id: int,
         device,
     ):
         super().__init__()
         self.d_model = d_model
+        self.nhead = nhead
         self.num_layers = num_layers
+        self.eos_token_id = eos_token_id
         self.device = device
         self.token_embedder = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
@@ -149,11 +172,11 @@ class TransformerEncoderGPT2(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx = torch.arange(input_ids.shape[1], device=self.device).unsqueeze(0).expand_as(input_ids)
+        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
-            mask=nn.Transformer.generate_square_subsequent_mask(input_ids.shape[1], device=input_ids.device),
+            mask=mask,
         )
         logits = self.decoder(transformed)
         return logits

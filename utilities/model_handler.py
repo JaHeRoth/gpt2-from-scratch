@@ -45,10 +45,16 @@ def print_stream(
     for token in stream(
         model=model, input_ids=input_ids, max_length=max_length, prob_threshold=prob_threshold, temperature=temperature
     ):
+        print(tokenizer.decode(token), end="", flush=True)
+        # After print, since we want to see if our model learns to generate EOS tokens
         if token == tokenizer.eos_token_id:
             break
-        print(tokenizer.decode(token), end="", flush=True)
     print("", flush=True)
+
+
+def _collate_to_tensor(batch):
+    batch_input_ids = [row["input_ids"] for row in batch]
+    return torch.tensor(batch_input_ids, dtype=torch.int64)
 
 
 def train(
@@ -84,13 +90,13 @@ def train(
         tokenized_train_ds,
         batch_size=train_batch_size,
         sampler=train_sampler,
-        collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
+        collate_fn=_collate_to_tensor,
     )
     validation_dl = DataLoader(
         tokenized_eval_ds,
         batch_size=train_batch_size * 2,
         shuffle=False,
-        collate_fn=lambda x: tokenizer.pad(x, return_tensors="pt"),
+        collate_fn=_collate_to_tensor,
     )
 
     total_steps = num_epochs * len(train_dl)
@@ -110,8 +116,8 @@ def train(
     for epoch_i in range(num_epochs):
         train_sampler.set_epoch(epoch_i)
         for batch_i, batch in enumerate(train_dl):
-            X: torch.Tensor = batch.input_ids.to(device)[:, :-1].contiguous()
-            y: torch.Tensor = batch.input_ids.to(device)[:, 1:].contiguous()
+            X: torch.Tensor = batch[:, :-1].contiguous()
+            y: torch.Tensor = batch[:, 1:].contiguous()
             logits = model(X)
             loss = nn.functional.cross_entropy(
                 logits.view(-1, logits.shape[-1]),
@@ -139,8 +145,8 @@ def train(
                     model.eval()
                     avg_val_loss = torch.Tensor([0.0]).to(device)
                     for validation_batch in validation_dl:
-                        X_val: torch.Tensor = validation_batch.input_ids.to(device)[:, :-1].contiguous()
-                        y_val: torch.Tensor = validation_batch.input_ids.to(device)[:, 1:].contiguous()
+                        X_val: torch.Tensor = validation_batch[:, :-1].contiguous()
+                        y_val: torch.Tensor = validation_batch[:, 1:].contiguous()
                         val_logits = model(X_val)
                         avg_val_loss += nn.functional.cross_entropy(
                             val_logits.view(-1, val_logits.shape[-1]),

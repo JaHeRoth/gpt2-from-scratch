@@ -49,6 +49,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         dim_feedforward=3072,
         vocab_size=tokenizer.vocab_size,
         context_length=context_length,
+        eos_token_id=tokenizer.eos_token_id,
         device=device,
     )
     # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
