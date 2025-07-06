@@ -188,11 +188,12 @@ class TransformerEncoderGPT2(nn.Module):
 
 
 class AttentionHead(nn.Module):
-    def __init__(self, d_model: int, dropout_p: float, device):
+    def __init__(self, d_model: int, num_heads: int, dropout_p: float, device):
         super().__init__()
-        self.q_proj = nn.Linear(d_model, d_model, device=device)
-        self.k_proj = nn.Linear(d_model, d_model, device=device)
-        self.v_proj = nn.Linear(d_model, d_model, device=device)
+        d_head = d_model // num_heads
+        self.q_proj = nn.Linear(d_model, d_head, device=device)
+        self.k_proj = nn.Linear(d_model, d_head, device=device)
+        self.v_proj = nn.Linear(d_model, d_head, device=device)
         self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
@@ -209,17 +210,18 @@ class MultiHeadAttention(nn.Module):
         assert d_model % num_heads == 0, "`d_model` must be a multiple of `num_heads`"
         self.attention_heads = nn.ModuleList(
             [
-                AttentionHead(d_model=d_model // num_heads, dropout_p=dropout_p, device=device)
+                AttentionHead(d_model=d_model, num_heads=num_heads, dropout_p=dropout_p, device=device)
                 for _ in range(num_heads)
             ]
         )
         self.out_proj = nn.Linear(d_model, d_model, device=device)
 
-    def forward(self, x, attn_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
+        batch_size = x.shape[0]
         head_results = torch.cat(
             [
-                head(x, attn_mask)
-                for head in self.attention_heads
+                head(x, attn_mask[i * batch_size : (i + 1) * batch_size])
+                for i, head in enumerate(self.attention_heads)
             ],
             dim=-1
         )
@@ -236,6 +238,7 @@ class BasicLayersEncoderGPT2(nn.Module):
         vocab_size: int,
         context_length: int,
         eos_token_id: int,
+        dropout_p: float,
         device,
     ):
         super().__init__()
@@ -258,14 +261,13 @@ class BasicLayersEncoderGPT2(nn.Module):
                         nn.ModuleList(
                             [
                                 nn.LayerNorm(d_model, device=device),
-                                # TODO: Decompose this
-                                nn.MultiheadAttention(
-                                    embed_dim=d_model,
+                                MultiHeadAttention(
+                                    d_model=d_model,
                                     num_heads=nhead,
+                                    dropout_p=dropout_p,
                                     device=device,
-                                    batch_first=True,
                                 ),
-                                nn.Dropout(p=0.1),
+                                nn.Dropout(p=dropout_p),
                             ]
                         ),
                         nn.ModuleList(
@@ -274,7 +276,7 @@ class BasicLayersEncoderGPT2(nn.Module):
                                 nn.Linear(d_model, dim_feedforward, device=device),
                                 nn.GELU(),
                                 nn.Linear(dim_feedforward, d_model, device=device),
-                                nn.Dropout(p=0.1),
+                                nn.Dropout(p=dropout_p),
                             ]
                         )
                     ]
@@ -309,14 +311,8 @@ class BasicLayersEncoderGPT2(nn.Module):
             for subblock in transformer_layer:
                 x = encoded
                 for layer in subblock:
-                    if isinstance(layer, nn.MultiheadAttention):
-                        x = layer(
-                            x,
-                            x,
-                            x,
-                            need_weights=False,
-                            attn_mask=mask,
-                        )[0]
+                    if isinstance(layer, MultiHeadAttention):
+                        x = layer(x, attn_mask=mask)
                     else:
                         x = layer(x)
                 encoded = encoded + x

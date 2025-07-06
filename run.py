@@ -54,6 +54,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             vocab_size=len(tokenizer),
             context_length=context_length,
             eos_token_id=tokenizer.eos_token_id,
+            dropout_p=0.1,
             device=device,
         )
         # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
