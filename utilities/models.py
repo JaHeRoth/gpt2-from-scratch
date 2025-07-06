@@ -334,10 +334,6 @@ class BasicLayersEncoderGPT2(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
-        elif isinstance(m, nn.MultiheadAttention):
-            nn.init.normal_(m.in_proj_weight, mean=0.0, std=0.02)
-            nn.init.zeros_(m.in_proj_bias)
-            # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
         input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
