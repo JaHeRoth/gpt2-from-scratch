@@ -1,5 +1,6 @@
 from math import sqrt
 
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -245,12 +246,17 @@ class FasterMultiHeadAttention(nn.Module):
         d_head = self.d_model // self.num_heads
 
         projected = self.in_proj(x)  # shape: (batch_size, seq_len, d_model * 3)
-        qkv = projected.view(batch_size * self.num_heads, seq_len, d_head, 3)
+        qkv = (
+            projected
+            .view(batch_size, seq_len, self.num_heads, d_head, 3)
+            .transpose(1, 2)
+            .reshape(batch_size * self.num_heads, seq_len, d_head, 3)
+        )
         q = qkv[:, :, :, 0]  # shape: (batch_size * num_heads, seq_len, d_head)
         k = qkv[:, :, :, 1]
         v = qkv[:, :, :, 2]
 
-        weight_logits = q @ k.transpose(-2, -1) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
+        weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
         weights = self.dropout(F.softmax(weight_logits, dim=-1))
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
