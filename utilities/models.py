@@ -212,17 +212,34 @@ class BasicLayersEncoderGPT2(nn.Module):
         self.positional_embedder = nn.Embedding(
             num_embeddings=context_length, embedding_dim=d_model, device=device
         )
+        nn.TransformerEncoderLayer
         self.transformer_layers = nn.ModuleList(
             [
-                # TODO: Further decompose these
-                nn.TransformerEncoderLayer(
-                    d_model=d_model,
-                    nhead=nhead,
-                    dim_feedforward=dim_feedforward,
-                    activation="gelu",
-                    device=device,
-                    batch_first=True,
-                    norm_first=True,
+                nn.ModuleList(
+                    [
+                        nn.ModuleList(
+                            [
+                                nn.LayerNorm(d_model, device=device),
+                                # TODO: Decompose this
+                                nn.MultiheadAttention(
+                                    embed_dim=d_model,
+                                    num_heads=nhead,
+                                    device=device,
+                                    batch_first=True,
+                                ),
+                                nn.Dropout(p=0.1),
+                            ]
+                        ),
+                        nn.ModuleList(
+                            [
+                                nn.LayerNorm(d_model, device=device),
+                                nn.Linear(d_model, dim_feedforward, device=device),
+                                nn.GELU(),
+                                nn.Linear(dim_feedforward, d_model, device=device),
+                                nn.Dropout(p=0.1),
+                            ]
+                        )
+                    ]
                 )
                 for _ in range(num_layers)
             ]
@@ -250,7 +267,20 @@ class BasicLayersEncoderGPT2(nn.Module):
     def forward(self, input_ids: torch.Tensor):
         input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         encoded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
-        for layer in self.transformer_layers:
-            encoded = layer(encoded, src_mask=mask)
+        for transformer_layer in self.transformer_layers:
+            for subblock in transformer_layer:
+                x = encoded
+                for layer in subblock:
+                    if isinstance(layer, nn.MultiheadAttention):
+                        x = layer(
+                            x,
+                            x,
+                            x,
+                            need_weights=False,
+                            attn_mask=mask,
+                        )[0]
+                    else:
+                        x = layer(x)
+                encoded = encoded + x
         logits = self.decoder(encoded)
         return logits
