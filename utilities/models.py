@@ -187,6 +187,45 @@ class TransformerEncoderGPT2(nn.Module):
         return logits
 
 
+class AttentionHead(nn.Module):
+    def __init__(self, d_model: int, dropout_p: float):
+        super().__init__()
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.k_proj = nn.Linear(d_model, d_model)
+        self.v_proj = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(p=dropout_p)
+
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_model)
+        # attn_maks.shape = (batch_size, seq_len, seq_len)
+        weight_logits = self.q_proj(x) @ self.k_proj(x).transpose(1, 2) + attn_mask
+        weights = self.dropout(F.softmax(weight_logits, dim=-1))
+        return weights @ self.v_proj(x)
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads: int, d_model: int, dropout_p: float):
+        super().__init__()
+        assert d_model % num_heads == 0, "`d_model` must be a multiple of `num_heads`"
+        self.attention_heads = nn.ModuleList(
+            [
+                AttentionHead(d_model=d_model // num_heads, dropout_p=dropout_p)
+                for _ in range(num_heads)
+            ]
+        )
+        self.out_proj = nn.Linear(d_model, d_model)
+
+    def forward(self, x, attn_mask: torch.Tensor):
+        head_results = torch.cat(
+            [
+                head(x, attn_mask)
+                for head in self.attention_heads
+            ],
+            dim=-1
+        )
+        return self.out_proj(head_results)
+
+
 class BasicLayersEncoderGPT2(nn.Module):
     def __init__(
         self,
