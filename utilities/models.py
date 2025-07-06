@@ -5,7 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 
 
-def build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id, nhead):
+def _build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id, nhead):
     B, L = input_ids.shape
     raw_idx = torch.arange(L, device=input_ids.device).expand_as(input_ids)
     last_eos_idx = torch.cummax(
@@ -109,7 +109,7 @@ class TransformerEncoderGPT(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
+        input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
@@ -177,7 +177,7 @@ class TransformerEncoderGPT2(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
+        input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
@@ -245,7 +245,7 @@ class BasicLayersEncoderGPT2(nn.Module):
             # `m.out_proj` is an instance of `nn.Linear`, thus already handled by the first condition
 
     def forward(self, input_ids: torch.Tensor):
-        input_idx, mask = build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
+        input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
         embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         transformed = self.transformer(
             embedded,
