@@ -235,7 +235,7 @@ class FasterMultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.d_model = d_model
 
-        self.in_proj = nn.Linear(d_model, d_model * 3)
+        self.in_proj = nn.Linear(d_model, d_model * 3, device=device)
         self.dropout = nn.Dropout(p=dropout_p)
         self.out_proj = nn.Linear(d_model, d_model, device=device)
 
