@@ -212,17 +212,20 @@ class BasicLayersEncoderGPT2(nn.Module):
         self.positional_embedder = nn.Embedding(
             num_embeddings=context_length, embedding_dim=d_model, device=device
         )
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=d_model,
-                nhead=nhead,
-                dim_feedforward=dim_feedforward,
-                activation="gelu",
-                device=device,
-                batch_first=True,
-                norm_first=True,
-            ),
-            num_layers=num_layers,
+        self.transformer_layers = nn.ModuleList(
+            [
+                # TODO: Further decompose these
+                nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=nhead,
+                    dim_feedforward=dim_feedforward,
+                    activation="gelu",
+                    device=device,
+                    batch_first=True,
+                    norm_first=True,
+                )
+                for _ in range(num_layers)
+            ]
         )
         self.apply(self.init_weights)
         self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
@@ -246,10 +249,8 @@ class BasicLayersEncoderGPT2(nn.Module):
 
     def forward(self, input_ids: torch.Tensor):
         input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
-        embedded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
-        transformed = self.transformer(
-            embedded,
-            mask=mask,
-        )
-        logits = self.decoder(transformed)
+        encoded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
+        for layer in self.transformer_layers:
+            encoded = layer(encoded, src_mask=mask)
+        logits = self.decoder(encoded)
         return logits

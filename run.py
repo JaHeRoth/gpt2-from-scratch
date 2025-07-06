@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel
 import time
 from pathlib import Path
 from utilities.model_handler import train
-from utilities.models import TransformerEncoderGPT2
+from utilities.models import TransformerEncoderGPT2, BasicLayersEncoderGPT2
 
 context_length = 512
 
@@ -46,7 +46,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
 
         # Using hyperparams of GPT paper (although we use a different dataset)
-        model = TransformerEncoderGPT2(
+        model = BasicLayersEncoderGPT2(
             d_model=768,
             nhead=12,
             num_layers=12,
