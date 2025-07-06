@@ -251,7 +251,6 @@ class BasicLayersEncoderGPT2(nn.Module):
         self.positional_embedder = nn.Embedding(
             num_embeddings=context_length, embedding_dim=d_model, device=device
         )
-        nn.TransformerEncoderLayer
         self.transformer_layers = nn.ModuleList(
             [
                 nn.ModuleList(
