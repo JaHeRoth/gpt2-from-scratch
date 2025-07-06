@@ -257,7 +257,7 @@ class FasterMultiHeadAttention(nn.Module):
             raw_head_results
             .view(batch_size, self.num_heads, seq_len, d_head)
             .transpose(1, 2)
-            .view(batch_size, seq_len, self.d_model)
+            .reshape(batch_size, seq_len, self.d_model)
         )
 
         return self.out_proj(head_results)
@@ -296,7 +296,7 @@ class BasicLayersEncoderGPT2(nn.Module):
                         nn.ModuleList(
                             [
                                 nn.LayerNorm(d_model, device=device),
-                                MultiHeadAttention(
+                                FasterMultiHeadAttention(
                                     d_model=d_model,
                                     num_heads=nhead,
                                     dropout_p=dropout_p,
@@ -346,7 +346,7 @@ class BasicLayersEncoderGPT2(nn.Module):
             for subblock in transformer_layer:
                 x = encoded
                 for layer in subblock:
-                    if isinstance(layer, MultiHeadAttention):
+                    if isinstance(layer, FasterMultiHeadAttention):
                         x = layer(x, attn_mask=mask)
                     else:
                         x = layer(x)
