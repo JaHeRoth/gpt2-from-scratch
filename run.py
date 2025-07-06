@@ -15,11 +15,16 @@ from utilities.models import TransformerEncoderGPT2
 context_length = 512
 
 def prep():
-    tokenizer = AutoTokenizer.from_pretrained(
-        "openai-community/gpt2",
-        pad_token="<|pad|>",
-        unk_token="<unk>",  # Because it appears often in the dataset
-    )
+    tokenizer_path = Path("outputs/tokenizer")
+    if not tokenizer_path.exists():
+        tokenizer_path.mkdir(parents=True, exist_ok=True)
+        AutoTokenizer.from_pretrained(
+            "openai-community/gpt2",
+            pad_token="<|pad|>",
+            unk_token="<unk>",  # Because it appears often in the dataset
+        ).save_pretrained(tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+
 
     _, tokenized_ds = load_preprocessed(
         hf_path="wikitext", hf_name="wikitext-103-v1", tokenizer=tokenizer, context_length=context_length
