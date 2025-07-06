@@ -188,11 +188,11 @@ class TransformerEncoderGPT2(nn.Module):
 
 
 class AttentionHead(nn.Module):
-    def __init__(self, d_model: int, dropout_p: float):
+    def __init__(self, d_model: int, dropout_p: float, device):
         super().__init__()
-        self.q_proj = nn.Linear(d_model, d_model)
-        self.k_proj = nn.Linear(d_model, d_model)
-        self.v_proj = nn.Linear(d_model, d_model)
+        self.q_proj = nn.Linear(d_model, d_model, device=device)
+        self.k_proj = nn.Linear(d_model, d_model, device=device)
+        self.v_proj = nn.Linear(d_model, d_model, device=device)
         self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
@@ -204,16 +204,16 @@ class AttentionHead(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, num_heads: int, d_model: int, dropout_p: float):
+    def __init__(self, num_heads: int, d_model: int, dropout_p: float, device):
         super().__init__()
         assert d_model % num_heads == 0, "`d_model` must be a multiple of `num_heads`"
         self.attention_heads = nn.ModuleList(
             [
-                AttentionHead(d_model=d_model // num_heads, dropout_p=dropout_p)
+                AttentionHead(d_model=d_model // num_heads, dropout_p=dropout_p, device=device)
                 for _ in range(num_heads)
             ]
         )
-        self.out_proj = nn.Linear(d_model, d_model)
+        self.out_proj = nn.Linear(d_model, d_model, device=device)
 
     def forward(self, x, attn_mask: torch.Tensor):
         head_results = torch.cat(
