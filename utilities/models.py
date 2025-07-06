@@ -228,6 +228,41 @@ class MultiHeadAttention(nn.Module):
         return self.out_proj(head_results)
 
 
+class FasterMultiHeadAttention(nn.Module):
+    def __init__(self, num_heads: int, d_model: int, dropout_p: float, device):
+        super().__init__()
+        assert d_model % num_heads == 0, "`d_model` must be a multiple of `num_heads`"
+        self.num_heads = num_heads
+        self.d_model = d_model
+
+        self.in_proj = nn.Linear(d_model, d_model * 3)
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.out_proj = nn.Linear(d_model, d_model, device=device)
+
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
+        batch_size = x.shape[0]
+        seq_len = x.shape[1]
+        d_head = self.d_model // self.num_heads
+
+        projected = self.in_proj(x)  # shape: (batch_size, seq_len, d_model * 3)
+        qkv = projected.view(batch_size * self.num_heads, seq_len, d_head, 3)
+        q = qkv[:, :, :, 0]  # shape: (batch_size * num_heads, seq_len, d_head)
+        k = qkv[:, :, :, 1]
+        v = qkv[:, :, :, 2]
+
+        weight_logits = q @ k.transpose(-2, -1) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
+        weights = self.dropout(F.softmax(weight_logits, dim=-1))
+        raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
+        head_results = (
+            raw_head_results
+            .view(batch_size, self.num_heads, seq_len, d_head)
+            .transpose(1, 2)
+            .view(batch_size, seq_len, self.d_model)
+        )
+
+        return self.out_proj(head_results)
+
+
 class BasicLayersEncoderGPT2(nn.Module):
     def __init__(
         self,
