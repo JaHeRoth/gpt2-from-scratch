@@ -33,11 +33,20 @@ def prep():
     return tokenizer, tokenized_ds
 
 
-def setup(rank, world_size):
+def setup(rank, world_size, failed_attempts=0):
+    master_port = 29500 + failed_attempts
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # where rank 0 lives
-    os.environ["MASTER_PORT"] = "29500"  # any free port
+    os.environ["MASTER_PORT"] = str(master_port)  # any free port
     backend = "nccl" if torch.cuda.is_available() else "gloo"
-    dist.init_process_group(backend=backend, rank=rank, world_size=world_size, timeout=timedelta(seconds=30))
+    try:
+        dist.init_process_group(backend=backend, rank=rank, world_size=world_size, timeout=timedelta(seconds=30))
+    except RuntimeError as err:
+        if failed_attempts == 100:
+            print(f"Failed 100 times in a row to setup, so giving up")
+            raise err
+        print(f"Failed to init process group with master port {master_port}, "
+              f"so retrying with master port {master_port + 1}. Encountered error: {err}")
+        setup(rank, world_size, failed_attempts + 1)
 
 
 def worker(rank, world_size, tokenizer, tokenized_ds):
@@ -79,6 +88,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             betas=(0.9, 0.98),
             eps=1e-9,
             lr=2.5e-4,
+            fused=True,
         )
         train(
             model=model,
@@ -87,7 +97,9 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             tokenized_train_ds=tokenized_ds["train"],
             tokenized_eval_ds=tokenized_ds["validation"],
             device=device,
-            train_batch_size=64,
+            train_batch_size=64,  # Note that effective sample size becomes `world_size` times this
+            warmup_steps=500,  # Non-standard
+            num_epochs=25,  # Non-standard
             run_id=str(int(time.time())),
             # We disable these for all but rank 0, to avoid cluttering the output
             make_outputs=rank == 0,
