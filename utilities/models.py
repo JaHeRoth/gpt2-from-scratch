@@ -55,6 +55,74 @@ class PositionalEmbedding(nn.Module):
             return embeddings.unsqueeze(0).expand(input_ids.shape[0], -1, -1)
 
 
+class Linear(nn.Module):
+    def __init__(self, d_in: int, d_out: int, device, bias: bool = True):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(d_out, d_in, device=device))
+        self.bias = nn.Parameter(torch.zeros(d_out, device=device)) if bias else None
+
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_in)
+        # x.unsqueeze(-1).shape = (batch_size, seq_len, d_in, 1)
+        # self.weight.shape = (d_out, d_in)
+        # (self.weight @ x.unsqueeze(-1)).shape = (batch_size, seq_len, d_out, 1)
+        y = (self.weight @ x.unsqueeze(-1)).squeeze(-1)
+        # y.shape = (batch_size, seq_len, d_out)
+        if self.bias is not None:
+            y = y + self.bias
+        return y
+
+
+class Embedding(nn.Module):
+    def __init__(self, num_embeddings: int, embedding_dim: int, device):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(num_embeddings, embedding_dim, device=device))
+
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len)
+        return self.weight[x]
+
+
+class LayerNorm(nn.Module):
+    def __init__(self, d_layer: int, device, eps=1e-5):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(d_layer, device=device))
+        self.bias = nn.Parameter(torch.zeros(d_layer, device=device))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_layer)
+        normalized = (
+            (x - x.mean(dim=-1, keepdim=True))
+            / torch.sqrt(x.var(dim=-1, unbiased=False, keepdim=True) + self.eps)
+        )
+        # normalized.shape = (batch_size, seq_len, d_layer)
+        denormalized = self.weight * normalized + self.bias
+        # denormalized.shape = (batch_size, seq_len, d_layer)
+        return denormalized
+
+
+class GELU(nn.Module):
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_layer)
+        return x * 0.5 * (1 + torch.erf(x / sqrt(2)))
+
+
+class Dropout(nn.Module):
+    def __init__(self, p: float):
+        super().__init__()
+        assert 0 <= p <= 1, f"p must be in [0, 1], but had value {p}"
+        self.p = p
+
+    def forward(self, x: torch.Tensor):
+        # x.shape = (batch_size, seq_len, d_layer)
+        if not self.training or self.p == 0:
+            return x
+        gate = (torch.rand_like(x) > self.p).float()
+        # gate.shape = (batch_size, seq_len, d_layer)
+        return (gate * x) / (1. - self.p)
+
+
 class TransformerEncoderGPT(nn.Module):
     def __init__(
         self,
@@ -192,10 +260,10 @@ class AttentionHead(nn.Module):
     def __init__(self, d_model: int, num_heads: int, dropout_p: float, device):
         super().__init__()
         d_head = d_model // num_heads
-        self.q_proj = nn.Linear(d_model, d_head, device=device)
-        self.k_proj = nn.Linear(d_model, d_head, device=device)
-        self.v_proj = nn.Linear(d_model, d_head, device=device)
-        self.dropout = nn.Dropout(p=dropout_p)
+        self.q_proj = Linear(d_model, d_head, device=device)
+        self.k_proj = Linear(d_model, d_head, device=device)
+        self.v_proj = Linear(d_model, d_head, device=device)
+        self.dropout = Dropout(p=dropout_p)
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
         # x.shape = (batch_size, seq_len, d_model)
@@ -215,7 +283,7 @@ class MultiHeadAttention(nn.Module):
                 for _ in range(num_heads)
             ]
         )
-        self.out_proj = nn.Linear(d_model, d_model, device=device)
+        self.out_proj = Linear(d_model, d_model, device=device)
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
         batch_size = x.shape[0]
@@ -236,9 +304,9 @@ class FasterMultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.d_model = d_model
 
-        self.in_proj = nn.Linear(d_model, d_model * 3, device=device)
-        self.dropout = nn.Dropout(p=dropout_p)
-        self.out_proj = nn.Linear(d_model, d_model, device=device)
+        self.in_proj = Linear(d_model, d_model * 3, device=device)
+        self.dropout = Dropout(p=dropout_p)
+        self.out_proj = Linear(d_model, d_model, device=device)
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
         batch_size = x.shape[0]
@@ -269,7 +337,7 @@ class FasterMultiHeadAttention(nn.Module):
         return self.out_proj(head_results)
 
 
-class BasicLayersEncoderGPT2(nn.Module):
+class ParametersGPT2(nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -289,10 +357,10 @@ class BasicLayersEncoderGPT2(nn.Module):
         self.context_length = context_length
         self.eos_token_id = eos_token_id
         self.device = device
-        self.token_embedder = nn.Embedding(
+        self.token_embedder = Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device
         )
-        self.positional_embedder = nn.Embedding(
+        self.positional_embedder = Embedding(
             num_embeddings=context_length, embedding_dim=d_model, device=device
         )
         self.transformer_layers = nn.ModuleList(
@@ -301,23 +369,23 @@ class BasicLayersEncoderGPT2(nn.Module):
                     [
                         nn.ModuleList(
                             [
-                                nn.LayerNorm(d_model, device=device),
+                                LayerNorm(d_model, device=device),
                                 FasterMultiHeadAttention(
                                     d_model=d_model,
                                     num_heads=nhead,
                                     dropout_p=dropout_p,
                                     device=device,
                                 ),
-                                nn.Dropout(p=dropout_p),
+                                Dropout(p=dropout_p),
                             ]
                         ),
                         nn.ModuleList(
                             [
-                                nn.LayerNorm(d_model, device=device),
-                                nn.Linear(d_model, dim_feedforward, device=device),
-                                nn.GELU(),
-                                nn.Linear(dim_feedforward, d_model, device=device),
-                                nn.Dropout(p=dropout_p),
+                                LayerNorm(d_model, device=device),
+                                Linear(d_model, dim_feedforward, device=device),
+                                GELU(),
+                                Linear(dim_feedforward, d_model, device=device),
+                                Dropout(p=dropout_p),
                             ]
                         )
                     ]
@@ -330,14 +398,14 @@ class BasicLayersEncoderGPT2(nn.Module):
         self.decoder.weight = self.token_embedder.weight
 
     def init_weights(self, m):
-        if isinstance(m, (nn.Linear, nn.Embedding)):
+        if isinstance(m, (Linear, Embedding)):
             std = 0.02
-            if isinstance(m, nn.Linear) and m.weight.shape[0] == self.d_model:
+            if isinstance(m, Linear) and m.weight.shape[0] == self.d_model:
                 std /= sqrt(self.num_layers)
             nn.init.normal_(m.weight, mean=0.0, std=std)
             if getattr(m, "bias", None) is not None:
                 nn.init.zeros_(m.bias)
-        elif isinstance(m, nn.LayerNorm):
+        elif isinstance(m, LayerNorm):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
 

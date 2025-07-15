@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel
 import time
 from pathlib import Path
 from utilities.model_handler import train
-from utilities.models import BasicLayersEncoderGPT2
+from utilities.models import ParametersGPT2
 from utilities import optimizers
 
 context_length = 512
@@ -56,7 +56,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
 
         # Using hyperparams of GPT paper (although we use a different dataset)
-        model = BasicLayersEncoderGPT2(
+        model = ParametersGPT2(
             d_model=768,
             nhead=12,
             num_layers=12,
@@ -97,7 +97,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             tokenized_train_ds=tokenized_ds["train"],
             tokenized_eval_ds=tokenized_ds["validation"],
             device=device,
-            train_batch_size=64,  # Note that effective sample size becomes `world_size` times this
+            train_batch_size=32,  # Note that effective sample size becomes `world_size` times this
             warmup_steps=500,  # Non-standard
             num_epochs=25,  # Non-standard
             run_id=str(int(time.time())),
