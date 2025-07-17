@@ -24,17 +24,15 @@ def greedy_sample(probits: torch.Tensor):
 
 
 def stream(model, input_ids: torch.Tensor, max_length: int, prob_threshold: float, temperature: float):
-    # TODO: KV-cache to avoid quadratic computational complexity in `max_length`
-    output_ids = input_ids.clone()
-    for _ in range(max_length - input_ids.shape[-1]):
+    next_input_ids = input_ids
+    for i in range(max_length - input_ids.shape[-1]):
         with torch.no_grad():
-            next_token_logits = model(output_ids)[:, -1, :]
+            next_token_logits = model(next_input_ids, streaming=i != 0, seq_len=i + input_ids.shape[-1])[:, -1, :]
             # TODO: If repetitions resurface as an issue: repetition_penalty and no_repeat_ngram_size
             next_token_shaped_logits = next_token_logits / temperature
             next_token_probits = F.softmax(next_token_shaped_logits, dim=-1)
-            next_token_id = nucleus_sample(probits=next_token_probits, prob_threshold=prob_threshold)
-            output_ids = torch.cat([output_ids, next_token_id], dim=1)
-            yield next_token_id.item()
+            next_input_ids = nucleus_sample(probits=next_token_probits, prob_threshold=prob_threshold)
+            yield next_input_ids.item()
 
 
 def print_stream(

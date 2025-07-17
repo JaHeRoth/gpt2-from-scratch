@@ -6,21 +6,23 @@ from torch import nn
 import torch.nn.functional as F
 
 
-def _build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id, nhead):
-    B, L = input_ids.shape
-    raw_idx = torch.arange(L, device=input_ids.device).expand_as(input_ids)
+def _build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id: int, nhead: int):
+    _, seq_len = input_ids.shape
+    raw_idx = torch.arange(seq_len, device=input_ids.device).expand_as(input_ids)
     last_eos_idx = torch.cummax(
         torch.where(input_ids == eos_token_id, raw_idx, 0),
         dim=1
     ).values
-    relative_idx = raw_idx - last_eos_idx
+    relative_idx = raw_idx - last_eos_idx  # shape: (batch_size, seq_len)
 
     segment_id = (input_ids == eos_token_id).cumsum(dim=1)
     same_segment_mask = segment_id.unsqueeze(2) == segment_id.unsqueeze(1)
-    causal_mask = torch.tril(torch.ones(L, L, dtype=torch.bool, device=input_ids.device))
+    causal_mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=input_ids.device))
     should_attend_mask = same_segment_mask & causal_mask
     additive_attention_mask = torch.where(should_attend_mask, 0, -torch.inf)
-    multihead_additive_attention_mask = additive_attention_mask.repeat_interleave(nhead, dim=0)
+    multihead_additive_attention_mask = additive_attention_mask.repeat_interleave(
+        repeats=nhead, dim=0
+    )  # shape: (batch_size * nhead, seq_len, seq_len)
 
     return relative_idx, multihead_additive_attention_mask
 
@@ -260,17 +262,28 @@ class AttentionHead(nn.Module):
     def __init__(self, d_model: int, num_heads: int, dropout_p: float, device):
         super().__init__()
         d_head = d_model // num_heads
+        self.kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None
+
         self.q_proj = Linear(d_model, d_head, device=device)
         self.k_proj = Linear(d_model, d_head, device=device)
         self.v_proj = Linear(d_model, d_head, device=device)
         self.dropout = Dropout(p=dropout_p)
 
-    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
-        # x.shape = (batch_size, seq_len, d_model)
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, use_kv_cache: bool):
+        # x.shape = (batch_size, seq_len | 1, d_model)
         # attn_maks.shape = (batch_size, seq_len, seq_len)
-        weight_logits = self.q_proj(x) @ self.k_proj(x).transpose(1, 2) + attn_mask
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        if use_kv_cache and self.kv_cache is not None:
+            # kv_cache[0].shape = (batch_size, seq_len - 1, d_head)
+            k = torch.cat((self.kv_cache[0], k), dim=1)
+            v = torch.cat((self.kv_cache[1], v), dim=1)
+        self.kv_cache = (k, v)
+
+        weight_logits = q @ k.transpose(1, 2) + attn_mask
         weights = self.dropout(F.softmax(weight_logits, dim=-1))
-        return weights @ self.v_proj(x)
+        return weights @ v
 
 
 class MultiHeadAttention(nn.Module):
@@ -285,11 +298,11 @@ class MultiHeadAttention(nn.Module):
         )
         self.out_proj = Linear(d_model, d_model, device=device)
 
-    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, use_kv_cache: bool):
         batch_size = x.shape[0]
         head_results = torch.cat(
             [
-                head(x, attn_mask[i * batch_size : (i + 1) * batch_size])
+                head(x, attn_mask[i * batch_size : (i + 1) * batch_size], use_kv_cache)
                 for i, head in enumerate(self.attention_heads)
             ],
             dim=-1
@@ -303,35 +316,43 @@ class FasterMultiHeadAttention(nn.Module):
         assert d_model % num_heads == 0, "`d_model` must be a multiple of `num_heads`"
         self.num_heads = num_heads
         self.d_model = d_model
+        self.kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None
 
         self.in_proj = Linear(d_model, d_model * 3, device=device)
         self.dropout = Dropout(p=dropout_p)
         self.out_proj = Linear(d_model, d_model, device=device)
 
-    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, use_kv_cache: bool):
+        # x.shape = (batch_size, seq_len | 1, d_model)
         batch_size = x.shape[0]
-        seq_len = x.shape[1]
+        out_seq_len = x.shape[1]
         d_head = self.d_model // self.num_heads
 
-        projected = self.in_proj(x)  # shape: (batch_size, seq_len, d_model * 3)
+        projected = self.in_proj(x)  # shape: (batch_size, out_seq_len, d_model * 3)
         qkv = (
             projected
-            .view(batch_size, seq_len, self.num_heads, d_head, 3)
+            .view(batch_size, out_seq_len, self.num_heads, d_head, 3)
             .transpose(1, 2)
-            .reshape(batch_size * self.num_heads, seq_len, d_head, 3)
+            .reshape(batch_size * self.num_heads, out_seq_len, d_head, 3)
         )
-        q = qkv[:, :, :, 0]  # shape: (batch_size * num_heads, seq_len, d_head)
-        k = qkv[:, :, :, 1]
-        v = qkv[:, :, :, 2]
+        q = qkv[:, :, :, 0]  # shape: (batch_size * num_heads, out_seq_len, d_head)
+        k = qkv[:, :, :, 1]  # shape: (batch_size * num_heads, out_seq_len, d_head)
+        v = qkv[:, :, :, 2]  # shape: (batch_size * num_heads, out_seq_len, d_head)
+
+        if use_kv_cache and self.kv_cache is not None:
+            # kv_cache[0].shape = (batch_size, seq_len - 1, d_head)
+            k = torch.cat((self.kv_cache[0], k), dim=1)  # shape: (batch_size * num_heads, seq_len, d_head)
+            v = torch.cat((self.kv_cache[1], v), dim=1)  # shape: (batch_size * num_heads, seq_len, d_head)
+        self.kv_cache = (k, v)
 
         weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
         weights = self.dropout(F.softmax(weight_logits, dim=-1))
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
             raw_head_results
-            .view(batch_size, self.num_heads, seq_len, d_head)
+            .view(batch_size, self.num_heads, out_seq_len, d_head)
             .transpose(1, 2)
-            .reshape(batch_size, seq_len, self.d_model)
+            .reshape(batch_size, out_seq_len, self.d_model)
         )
 
         return self.out_proj(head_results)
@@ -409,15 +430,23 @@ class ParametersGPT2(nn.Module):
             nn.init.ones_(m.weight)
             nn.init.zeros_(m.bias)
 
-    def forward(self, input_ids: torch.Tensor):
-        input_idx, mask = _build_supporters_for_packed_batch(input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead)
+    def forward(self, input_ids: torch.Tensor, streaming: bool = False, seq_len: int | None = None):
+        if streaming:
+            assert seq_len is not None, "seq_len must be passed when streaming"
+            input_idx = torch.ones_like(input_ids, device=input_ids.device) * seq_len
+            mask = torch.zeros(self.nhead, 1, seq_len, device=input_ids.device)
+        else:
+            input_idx, mask = _build_supporters_for_packed_batch(
+                input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead
+            )
+
         encoded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
         for transformer_layer in self.transformer_layers:
             for subblock in transformer_layer:
                 x = encoded
                 for layer in subblock:
                     if isinstance(layer, FasterMultiHeadAttention):
-                        x = layer(x, attn_mask=mask)
+                        x = layer(x, attn_mask=mask, use_kv_cache=streaming)
                     else:
                         x = layer(x)
                 encoded = encoded + x

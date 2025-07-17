@@ -97,7 +97,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             tokenized_train_ds=tokenized_ds["train"],
             tokenized_eval_ds=tokenized_ds["validation"],
             device=device,
-            train_batch_size=32,  # Note that effective sample size becomes `world_size` times this
+            train_batch_size=16,  # Note that effective sample size becomes `world_size` times this
             warmup_steps=500,  # Non-standard
             num_epochs=25,  # Non-standard
             run_id=str(int(time.time())),
