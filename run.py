@@ -67,6 +67,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             dropout_p=0.1,
             device=device,
         )
+        # TODO: Compile model
         # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
         model = DistributedDataParallel(
             model,
