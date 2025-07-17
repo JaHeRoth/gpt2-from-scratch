@@ -116,12 +116,13 @@ def train(
         for batch_i, batch in enumerate(train_dl):
             X: torch.Tensor = batch[:, :-1].contiguous()
             y: torch.Tensor = batch[:, 1:].contiguous()
-            logits = model(X)
-            loss = nn.functional.cross_entropy(
-                logits.view(-1, logits.shape[-1]),
-                y.view(-1),
-                ignore_index=tokenizer.pad_token_id,
-            )
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                logits = model(X)
+                loss = nn.functional.cross_entropy(
+                    logits.view(-1, logits.shape[-1]),
+                    y.view(-1),
+                    ignore_index=tokenizer.pad_token_id,
+                )
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -134,13 +135,14 @@ def train(
 
             if make_outputs and batch_i % stream_period == 0:
                 model.eval()
-                print_stream(
-                    model=model,
-                    tokenizer=tokenizer,
-                    prompt=stream_prompt,
-                    device=device,
-                    max_length=model.module.context_length,
-                )
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    print_stream(
+                        model=model,
+                        tokenizer=tokenizer,
+                        prompt=stream_prompt,
+                        device=device,
+                        max_length=model.module.context_length,
+                    )
                 print("", flush=True)
                 model.train()
 
@@ -151,7 +153,8 @@ def train(
                     for validation_batch in validation_dl:
                         X_val: torch.Tensor = validation_batch[:, :-1].contiguous()
                         y_val: torch.Tensor = validation_batch[:, 1:].contiguous()
-                        val_logits = model(X_val)
+                        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                            val_logits = model(X_val)
                         avg_val_loss += nn.functional.cross_entropy(
                             val_logits.view(-1, val_logits.shape[-1]),
                             y_val.view(-1),

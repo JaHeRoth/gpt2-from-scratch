@@ -39,6 +39,7 @@ class PositionalEmbedding(nn.Module):
             / embedding_dim
         )
 
+    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, input_ids: torch.Tensor):
         with torch.no_grad():
             positions = torch.arange(
@@ -92,6 +93,7 @@ class LayerNorm(nn.Module):
         self.bias = nn.Parameter(torch.zeros(d_layer, device=device))
         self.eps = eps
 
+    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor):
         # x.shape = (batch_size, seq_len, d_layer)
         normalized = (
@@ -105,6 +107,7 @@ class LayerNorm(nn.Module):
 
 
 class GELU(nn.Module):
+    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor):
         # x.shape = (batch_size, seq_len, d_layer)
         return x * 0.5 * (1 + torch.erf(x / sqrt(2)))
@@ -346,7 +349,9 @@ class FasterMultiHeadAttention(nn.Module):
         self.kv_cache = (k, v)
 
         weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
-        weights = self.dropout(F.softmax(weight_logits, dim=-1))
+        with torch.autocast(device_type="cuda", enabled=False):  # softmax needs FP32
+            weights = F.softmax(weight_logits.float(), dim=-1).to(x.dtype)
+        weights = self.dropout(weights)
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
             raw_head_results
