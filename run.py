@@ -78,7 +78,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         decaying_params = []
         non_decaying_params = []
         for name, param in model.named_parameters():
-            if name.endswith("bias") or ".norm" in name:
+            if len(param.shape) < 2:  # Covers bias and layer-norm weight
                 non_decaying_params.append(param)
             else:
                 decaying_params.append(param)
