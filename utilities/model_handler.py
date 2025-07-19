@@ -189,7 +189,7 @@ def train(
                     avg_between_processes(tensor=avg_val_loss)
                     if make_outputs:
                         eval_losses.append(avg_val_loss.item())
-                        print(f"Avg. validation Loss {avg_val_loss.item()}")
+                        print(f"Average validation loss: {avg_val_loss.item()}")
                     model.train()
 
             if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
