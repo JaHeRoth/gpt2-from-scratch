@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
+import torch.distributed as dist
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
@@ -85,6 +86,10 @@ def train(
         tokenized_train_ds,
         shuffle=True,
     )
+    eval_sampler = torch.utils.data.distributed.DistributedSampler(
+        tokenized_eval_ds,
+        shuffle=False,
+    )
 
     train_dl = DataLoader(
         tokenized_train_ds,
@@ -95,7 +100,7 @@ def train(
     validation_dl = DataLoader(
         tokenized_eval_ds,
         batch_size=train_batch_size * 2,
-        shuffle=False,
+        sampler=eval_sampler,
         collate_fn=lambda batch: batch_to_tensor(batch, device),
     )
 
@@ -115,6 +120,7 @@ def train(
     eval_losses = []
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
+        eval_sampler.set_epoch(epoch_i)
         avg_train_loss = torch.zeros((1,), device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
             should_step = batch_i % gradient_accumulation_steps == 0
@@ -141,8 +147,8 @@ def train(
             if batch_i % (log_period * gradient_accumulation_steps) == 0:
                 if make_outputs:
                     # We prefer ReduceOp.SUM over ReduceOP.AVG, since the latter isn't supported by Gloo
-                    torch.distributed.all_reduce(tensor=avg_train_loss, op=torch.distributed.ReduceOp.SUM)
-                    avg_train_loss /= torch.distributed.get_world_size()
+                    dist.all_reduce(tensor=avg_train_loss, op=dist.ReduceOp.SUM)
+                    avg_train_loss /= dist.get_world_size()
                     train_losses.append(avg_train_loss.item())
                     print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
                           f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss.item()}")
@@ -161,10 +167,10 @@ def train(
                 print("", flush=True)
                 model.train()
 
-            if make_outputs and batch_i % (eval_period * gradient_accumulation_steps) == 0:
+            if batch_i % (eval_period * gradient_accumulation_steps) == 0:
                 with torch.no_grad():
                     model.eval()
-                    avg_val_loss = 0.
+                    avg_val_loss = torch.zeros((1,), device=device)
                     for validation_batch in validation_dl:
                         X_val: torch.Tensor = validation_batch[:, :-1].contiguous()
                         y_val: torch.Tensor = validation_batch[:, 1:].contiguous()
@@ -177,8 +183,11 @@ def train(
                                 ignore_index=tokenizer.pad_token_id,
                             ) / len(validation_dl)
                         ).item()
-                    eval_losses.append(avg_val_loss)
-                    print(f"Avg. validation Loss {avg_val_loss}")
+                    if make_outputs:
+                        dist.all_reduce(tensor=avg_val_loss, op=dist.ReduceOp.SUM)
+                        avg_val_loss /= dist.get_world_size()
+                        eval_losses.append(avg_val_loss)
+                        print(f"Avg. validation Loss {avg_val_loss}")
                     model.train()
 
             if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
