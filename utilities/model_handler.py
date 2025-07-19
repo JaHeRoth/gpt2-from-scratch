@@ -115,7 +115,7 @@ def train(
     eval_losses = []
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
-        avg_train_loss = 0.
+        avg_train_loss = torch.zeros((1,), device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
             should_step = batch_i % gradient_accumulation_steps == 0
 
@@ -129,7 +129,7 @@ def train(
                         y.view(-1),
                         ignore_index=tokenizer.pad_token_id,
                     ) / gradient_accumulation_steps
-                    avg_train_loss += loss.item() / log_period
+                    avg_train_loss += loss / log_period
                 loss.backward()
 
             if should_step:
@@ -138,11 +138,15 @@ def train(
                 optimizer.zero_grad()
                 scheduler.step()
 
-            if make_outputs and batch_i % (log_period * gradient_accumulation_steps) == 0:
-                train_losses.append(avg_train_loss)
-                print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
-                      f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss}")
-                avg_train_loss = 0.
+            if batch_i % (log_period * gradient_accumulation_steps) == 0:
+                if make_outputs:
+                    # We prefer ReduceOp.SUM over ReduceOP.AVG, since the latter isn't supported by Gloo
+                    torch.distributed.all_reduce(tensor=avg_train_loss, op=torch.distributed.ReduceOp.SUM)
+                    avg_train_loss /= torch.distributed.get_world_size()
+                    train_losses.append(avg_train_loss.item())
+                    print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
+                          f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss.item()}")
+                avg_train_loss = torch.zeros((1,), device=device)
 
             if make_outputs and batch_i % (stream_period * gradient_accumulation_steps) == 0:
                 model.eval()
