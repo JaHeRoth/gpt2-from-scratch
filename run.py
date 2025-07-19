@@ -53,6 +53,7 @@ def setup(rank, world_size, failed_attempts=0):
 def worker(rank, world_size, tokenizer, tokenized_ds):
     setup(rank, world_size)
     try:
+        torch.manual_seed(42)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
 
         # Using hyperparams of GPT paper (although we use a different dataset)
