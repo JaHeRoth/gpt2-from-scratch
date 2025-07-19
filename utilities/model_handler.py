@@ -57,6 +57,11 @@ def batch_to_tensor(batch, device):
     return torch.tensor(batch_input_ids, dtype=torch.int64, device=device)
 
 
+def avg_between_processes(tensor: torch.Tensor) -> None:
+    # We prefer ReduceOp.SUM over ReduceOP.AVG, since the latter isn't supported by Gloo
+    dist.all_reduce(tensor=tensor, op=dist.ReduceOp.SUM)
+    tensor /= dist.get_world_size()
+
 def train(
     model,
     optimizer,
@@ -145,10 +150,8 @@ def train(
                 scheduler.step()
 
             if batch_i % (log_period * gradient_accumulation_steps) == 0:
+                avg_between_processes(tensor=avg_train_loss)
                 if make_outputs:
-                    # We prefer ReduceOp.SUM over ReduceOP.AVG, since the latter isn't supported by Gloo
-                    dist.all_reduce(tensor=avg_train_loss, op=dist.ReduceOp.SUM)
-                    avg_train_loss /= dist.get_world_size()
                     train_losses.append(avg_train_loss.item())
                     print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
                           f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss.item()}")
@@ -183,9 +186,8 @@ def train(
                                 ignore_index=tokenizer.pad_token_id,
                             ) / len(validation_dl)
                         ).item()
+                    avg_between_processes(tensor=avg_val_loss)
                     if make_outputs:
-                        dist.all_reduce(tensor=avg_val_loss, op=dist.ReduceOp.SUM)
-                        avg_val_loss /= dist.get_world_size()
                         eval_losses.append(avg_val_loss)
                         print(f"Avg. validation Loss {avg_val_loss}")
                     model.train()
