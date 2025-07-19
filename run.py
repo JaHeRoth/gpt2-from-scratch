@@ -40,7 +40,7 @@ def setup(rank, world_size, failed_attempts=0):
     os.environ["MASTER_PORT"] = str(master_port)  # any free port
     backend = "nccl" if torch.cuda.is_available() else "gloo"
     try:
-        dist.init_process_group(backend=backend, rank=rank, world_size=world_size, timeout=timedelta(seconds=30))
+        dist.init_process_group(backend=backend, rank=rank, world_size=world_size)
     except RuntimeError as err:
         if failed_attempts == 100:
             print(f"Failed 100 times in a row to setup, so giving up")
@@ -67,7 +67,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             dropout_p=0.1,
             device=device,
         )
-        # TODO: Compile model
+        model.compile()
         # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
         model = DistributedDataParallel(
             model,
@@ -124,6 +124,7 @@ def run():
     if torch.cuda.is_available():
         world_size = torch.cuda.device_count()
         print(f"Running on {world_size} GPUs")
+        os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"  # So that all GPUs exit upon program exit
         mp.spawn(worker, nprocs=world_size, args=(world_size, tokenizer, tokenized_ds))
     else:
         print(f"Running on a single CPU")
