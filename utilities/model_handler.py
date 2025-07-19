@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
@@ -65,6 +66,7 @@ def train(
     make_outputs: bool,
     stream_prompt: str,
     train_batch_size: int = 64,
+    gradient_accumulation_steps: int = 1,
     num_epochs: int = 100,
     warmup_steps: int = 2000,
     log_period: int = 25,
@@ -111,29 +113,38 @@ def train(
     model.train()
     train_losses = []
     eval_losses = []
-    for epoch_i in range(num_epochs):
+    for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
-        for batch_i, batch in enumerate(train_dl):
+        avg_train_loss = 0.
+        for batch_i, batch in enumerate(train_dl, start=1):
+            should_step = batch_i % gradient_accumulation_steps == 0
+
             X: torch.Tensor = batch[:, :-1].contiguous()
             y: torch.Tensor = batch[:, 1:].contiguous()
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                logits = model(X)
-                loss = nn.functional.cross_entropy(
-                    logits.view(-1, logits.shape[-1]),
-                    y.view(-1),
-                    ignore_index=tokenizer.pad_token_id,
-                )
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            optimizer.zero_grad()
-            scheduler.step()
+            with nullcontext() if should_step else model.no_sync():
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    logits = model(X)
+                    loss = nn.functional.cross_entropy(
+                        logits.view(-1, logits.shape[-1]),
+                        y.view(-1),
+                        ignore_index=tokenizer.pad_token_id,
+                    ) / gradient_accumulation_steps
+                    avg_train_loss += loss.item() / log_period
+                loss.backward()
 
-            if make_outputs and batch_i % log_period == 0:
-                train_losses.append(loss.item())
-                print(f"Batch {batch_i + 1}/{len(train_dl)} in epoch {epoch_i + 1}/{num_epochs}: Loss {loss.item()}")
+            if should_step:
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
 
-            if make_outputs and batch_i % stream_period == 0:
+            if make_outputs and batch_i % (log_period * gradient_accumulation_steps) == 0:
+                train_losses.append(avg_train_loss)
+                print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
+                      f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss}")
+                avg_train_loss = 0.
+
+            if make_outputs and batch_i % (stream_period * gradient_accumulation_steps) == 0:
                 model.eval()
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     print_stream(
@@ -146,31 +157,33 @@ def train(
                 print("", flush=True)
                 model.train()
 
-            if make_outputs and batch_i % eval_period == 0:
+            if make_outputs and batch_i % (eval_period * gradient_accumulation_steps) == 0:
                 with torch.no_grad():
                     model.eval()
-                    avg_val_loss = torch.Tensor([0.0]).to(device)
+                    avg_val_loss = 0.
                     for validation_batch in validation_dl:
                         X_val: torch.Tensor = validation_batch[:, :-1].contiguous()
                         y_val: torch.Tensor = validation_batch[:, 1:].contiguous()
                         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                             val_logits = model(X_val)
-                        avg_val_loss += nn.functional.cross_entropy(
-                            val_logits.view(-1, val_logits.shape[-1]),
-                            y_val.view(-1),
-                            ignore_index=tokenizer.pad_token_id,
-                        ) / len(validation_dl)
-                    eval_losses.append(avg_val_loss.item())
-                    print(f"Avg. validation Loss {avg_val_loss.item()}")
+                        avg_val_loss += (
+                            nn.functional.cross_entropy(
+                                val_logits.view(-1, val_logits.shape[-1]),
+                                y_val.view(-1),
+                                ignore_index=tokenizer.pad_token_id,
+                            ) / len(validation_dl)
+                        ).item()
+                    eval_losses.append(avg_val_loss)
+                    print(f"Avg. validation Loss {avg_val_loss}")
                     model.train()
 
-            if make_outputs and batch_i % checkpoint_period == 0:
-                path = checkpoint_dir / f"epoch_{epoch_i + 1}_batch_{batch_i + 1}"
+            if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
+                path = checkpoint_dir / f"epoch_{epoch_i}_batch_{batch_i + 1}"
                 print(f"Saving state dict checkpoint to '{path}'.")
                 torch.save(model.module.state_dict(), path)
 
         if make_outputs:
-            print("=" * 40 + f"COMPLETED EPOCH {epoch_i + 1}/{num_epochs}" + "=" * 40)
+            print("=" * 40 + f"COMPLETED EPOCH {epoch_i}/{num_epochs}" + "=" * 40)
 
             train_loss_batch_i = np.arange(len(train_losses)) * log_period
             eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
@@ -178,12 +191,12 @@ def train(
             plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
             plt.xlabel("Batch number")
             plt.ylabel("Loss")
-            plt.title(f"Loss over first {epoch_i + 1} epoch(s)")
+            plt.title(f"Loss over first {epoch_i} epoch(s)")
             plt.xscale("log")
             plt.yscale("log")
             plt.legend()
             plt.grid()
-            plt.savefig(plot_dir / f"epoch_{epoch_i + 1}.png", bbox_inches="tight")
+            plt.savefig(plot_dir / f"epoch_{epoch_i}.png", bbox_inches="tight")
             plt.show()
             plt.clf()
 
