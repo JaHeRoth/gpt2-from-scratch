@@ -159,14 +159,14 @@ def train(
                 if make_outputs:
                     train_losses.append(avg_train_loss.item())
                     log_period_seconds = time.time() - log_period_start_time
-                    seconds_per_update = log_period_seconds / log_period
+                    ms_per_update = 1000 * log_period_seconds / log_period
                     tokens_per_update = X.numel() * gradient_accumulation_steps * dist.get_world_size()
                     update_i = batch_i // gradient_accumulation_steps
                     num_updates = len(train_dl) // gradient_accumulation_steps
                     print(f"Update {update_i}/{num_updates} in epoch {epoch_i}/{num_epochs}: "
-                          f"Loss={avg_train_loss.item():.3f}, Grad norm={unclipped_update_norms[-1]}, "
-                          f"ms/update={round(1000 * seconds_per_update)}, "
-                          f"tokens/s={round(tokens_per_update / seconds_per_update)}")
+                          f"Loss={avg_train_loss.item():.3f}, Grad norm={unclipped_update_norms[-1]:.2f}, "
+                          f"ms/update={round(ms_per_update)}, "
+                          f"tokens/ms={round(tokens_per_update / ms_per_update)}")
                     log_period_start_time = time.time()
                 avg_train_loss = torch.zeros((1,), device=device)
 
