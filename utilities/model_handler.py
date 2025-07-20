@@ -124,6 +124,7 @@ def train(
     model.train()
     train_losses = []
     eval_losses = []
+    unclipped_update_norms = []
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
         eval_sampler.set_epoch(epoch_i)
@@ -146,7 +147,9 @@ def train(
                 loss.backward()
 
             if should_update:
-                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                unclipped_update_norms.append(
+                    nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                )
                 optimizer.step()
                 optimizer.zero_grad()
                 scheduler.step()
@@ -161,7 +164,8 @@ def train(
                     update_i = batch_i // gradient_accumulation_steps
                     num_updates = len(train_dl) // gradient_accumulation_steps
                     print(f"Update {update_i}/{num_updates} in epoch {epoch_i}/{num_epochs}: "
-                          f"Loss={avg_train_loss.item():.3f}, ms/update={round(1000 * seconds_per_update)}, "
+                          f"Loss={avg_train_loss.item():.3f}, Grad norm={unclipped_update_norms[-1]}, "
+                          f"ms/update={round(1000 * seconds_per_update)}, "
                           f"tokens/s={round(tokens_per_update / seconds_per_update)}")
                     log_period_start_time = time.time()
                 avg_train_loss = torch.zeros((1,), device=device)
@@ -213,14 +217,22 @@ def train(
             eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
             plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
             plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
-            plt.xlabel("Batch number")
+            plt.xlabel("Update")
             plt.ylabel("Loss")
             plt.title(f"Loss over first {epoch_i} epoch(s)")
             plt.xscale("log")
             plt.yscale("log")
             plt.legend()
             plt.grid()
-            plt.savefig(plot_dir / f"epoch_{epoch_i}.png", bbox_inches="tight")
+            plt.savefig(plot_dir / f"losses__epoch_{epoch_i}.png", bbox_inches="tight")
+            plt.show()
+            plt.clf()
+
+            plt.plot(unclipped_update_norms)
+            plt.xlabel("Update")
+            plt.ylabel("Unclipped update norm")
+            plt.grid()
+            plt.savefig(plot_dir / f"unclipped_update_norm__epoch_{epoch_i}.png", bbox_inches="tight")
             plt.show()
             plt.clf()
 
