@@ -75,14 +75,8 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             device_ids=[rank] if torch.cuda.is_available() else None,
         )
 
-        decaying_params = []
-        non_decaying_params = []
-        for name, param in model.named_parameters():
-            if len(param.shape) < 2:  # Covers bias and layer-norm weight
-                non_decaying_params.append(param)
-            else:
-                decaying_params.append(param)
-
+        decaying_params = [param for param in model.parameters() if len(param.shape) >= 2]
+        non_decaying_params = [param for param in model.parameters() if len(param.shape) < 2]
         optimizer = optimizers.AdamW(
             params=[
                 {"params": decaying_params, "weight_decay": 0.01},
@@ -92,6 +86,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             eps=1e-9,
             lr=2.5e-4,
         )
+
         train(
             model=model,
             optimizer=optimizer,
