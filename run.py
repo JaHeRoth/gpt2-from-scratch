@@ -107,7 +107,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             # We disable these for all but rank 0, to avoid cluttering the output
             make_outputs=rank == 0,
             stream_prompt=f"{tokenizer.eos_token}She first",
-            log_period=50,
+            log_period=5,
             stream_period=250,
             eval_period=500,
             checkpoint_period=100,

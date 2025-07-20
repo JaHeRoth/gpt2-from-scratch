@@ -1,3 +1,4 @@
+import time
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -126,13 +127,14 @@ def train(
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
         eval_sampler.set_epoch(epoch_i)
+        log_period_start_time = time.time()
         avg_train_loss = torch.zeros((1,), device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
-            should_step = batch_i % gradient_accumulation_steps == 0
+            should_update = batch_i % gradient_accumulation_steps == 0
 
             X: torch.Tensor = batch[:, :-1].contiguous()
             y: torch.Tensor = batch[:, 1:].contiguous()
-            with nullcontext() if should_step else model.no_sync():
+            with nullcontext() if should_update else model.no_sync():
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     logits = model(X)
                     loss = nn.functional.cross_entropy(
@@ -143,7 +145,7 @@ def train(
                     avg_train_loss += loss / log_period
                 loss.backward()
 
-            if should_step:
+            if should_update:
                 nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
                 optimizer.zero_grad()
@@ -153,8 +155,15 @@ def train(
                 avg_between_processes(tensor=avg_train_loss)
                 if make_outputs:
                     train_losses.append(avg_train_loss.item())
-                    print(f"Step {batch_i // gradient_accumulation_steps}/{len(train_dl) // gradient_accumulation_steps} "
-                          f"in epoch {epoch_i + 1}/{num_epochs}: Avg. training loss {avg_train_loss.item()}")
+                    log_period_seconds = time.time() - log_period_start_time
+                    seconds_per_update = log_period_seconds / log_period
+                    tokens_per_update = X.numel() * gradient_accumulation_steps * dist.get_world_size()
+                    update_i = batch_i // gradient_accumulation_steps
+                    num_updates = len(train_dl) // gradient_accumulation_steps
+                    print(f"Update {update_i}/{num_updates} in epoch {epoch_i}/{num_epochs}: "
+                          f"Loss={avg_train_loss.item():.3f}, ms/update={round(1000 * seconds_per_update)}, "
+                          f"tokens/s={round(tokens_per_update / seconds_per_update)}")
+                    log_period_start_time = time.time()
                 avg_train_loss = torch.zeros((1,), device=device)
 
             if make_outputs and batch_i % (stream_period * gradient_accumulation_steps) == 0:
