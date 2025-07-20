@@ -87,6 +87,11 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             lr=2.5e-4,
         )
 
+        tokens_per_update = 524288
+        train_batch_size = 32
+        gradient_accumulation_steps = max(1, tokens_per_update // world_size // train_batch_size // context_length)
+        if rank == 0:
+            print(f"{gradient_accumulation_steps=}")
         train(
             model=model,
             optimizer=optimizer,
@@ -94,8 +99,8 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             tokenized_train_ds=tokenized_ds["train"],
             tokenized_eval_ds=tokenized_ds["validation"],
             device=device,
-            train_batch_size=32,  # Note that effective sample size becomes `world_size` times this
-            gradient_accumulation_steps=2,  # Non-standard
+            train_batch_size=train_batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             warmup_steps=500,  # Non-standard
             num_epochs=25,  # Non-standard
             run_id=str(int(time.time())),
