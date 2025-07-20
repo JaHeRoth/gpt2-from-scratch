@@ -130,9 +130,9 @@ class Dropout(nn.Module):
 
 class Softmax(nn.Module):
     @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, dim=-1):
         exponentiated = x.exp()
-        return exponentiated / exponentiated.sum(dim=-1)
+        return exponentiated / exponentiated.sum(dim=dim)
 
 
 class TransformerEncoderGPT(nn.Module):
@@ -293,7 +293,7 @@ class AttentionHead(nn.Module):
         self.kv_cache = (k, v)
 
         weight_logits = q @ k.transpose(1, 2) + attn_mask
-        weights = self.dropout(self.softmax(weight_logits, dim=-1))
+        weights = self.dropout(self.softmax(weight_logits))
         return weights @ v
 
 
@@ -358,9 +358,7 @@ class FasterMultiHeadAttention(nn.Module):
         self.kv_cache = (k, v)
 
         weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
-        with torch.autocast(device_type="cuda", enabled=False):  # softmax needs FP32
-            weights = self.softmax(weight_logits.float(), dim=-1).to(x.dtype)
-        weights = self.dropout(weights)
+        weights = self.dropout(self.softmax(weight_logits))
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
             raw_head_results
