@@ -1,4 +1,5 @@
 from datetime import timedelta
+from math import ceil
 
 from utilities.data_handler import load_preprocessed
 from transformers import AutoTokenizer
@@ -62,7 +63,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             nhead=12,
             num_layers=12,
             dim_feedforward=3072,
-            vocab_size=len(tokenizer),
+            vocab_size=ceil(len(tokenizer) / 64) * 64,  # Multiples of 64 make for faster matrix operations
             context_length=context_length,
             eos_token_id=tokenizer.eos_token_id,
             dropout_p=0.1,
