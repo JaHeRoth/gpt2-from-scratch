@@ -56,7 +56,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         torch.manual_seed(42)
         device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
 
-        # Using hyperparams of GPT paper (although we use a different dataset)
+        # Hyperparameters are inspired by GPT and GPT-3 papers
         model = ParametersGPT2(
             d_model=768,
             nhead=12,
