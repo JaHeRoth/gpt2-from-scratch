@@ -215,11 +215,8 @@ def train(
         if make_outputs:
             print("=" * 40 + f"COMPLETED EPOCH {epoch_i}/{num_epochs}" + "=" * 40)
 
-            # TODO: This x-axis is no longer correct
-            train_loss_batch_i = np.arange(len(train_losses)) * log_period
-            eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
-            plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
-            plt.plot(eval_loss_batch_i + 1, eval_losses, "--o", label="Eval Loss")
+            plt.plot(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
+            plt.plot(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
             plt.xlabel("Update")
             plt.ylabel("Loss")
             plt.title(f"Loss over first {epoch_i} epoch(s)")
