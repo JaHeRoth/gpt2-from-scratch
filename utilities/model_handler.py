@@ -122,8 +122,8 @@ def train(
     )
 
     model.train()
-    train_losses = []
-    eval_losses = []
+    train_losses = {}
+    eval_losses = {}
     unclipped_update_norms = []
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
@@ -131,6 +131,10 @@ def train(
         log_period_start_time = time.time()
         avg_train_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
+            global_update_i = (
+                (epoch_i - 1) * len(train_dl) // gradient_accumulation_steps
+                + batch_i // gradient_accumulation_steps
+            )
             should_update = batch_i % gradient_accumulation_steps == 0
 
             X: torch.Tensor = batch[:, :-1].contiguous()
@@ -156,7 +160,7 @@ def train(
             if batch_i % (log_period * gradient_accumulation_steps) == 0:
                 avg_between_processes(tensor=avg_train_loss)
                 if make_outputs:
-                    train_losses.append(avg_train_loss.item())
+                    train_losses[global_update_i] = avg_train_loss.item()
                     log_period_seconds = time.time() - log_period_start_time
                     ms_per_update = 1000 * log_period_seconds / log_period
                     tokens_per_update = X.numel() * gradient_accumulation_steps * dist.get_world_size()
@@ -199,7 +203,7 @@ def train(
                         )
                     avg_between_processes(tensor=avg_val_loss)
                     if make_outputs:
-                        eval_losses.append(avg_val_loss.item())
+                        eval_losses[global_update_i] = avg_val_loss.item()
                         print(f"Average validation loss: {avg_val_loss.item()}")
                     model.train()
 
@@ -211,6 +215,7 @@ def train(
         if make_outputs:
             print("=" * 40 + f"COMPLETED EPOCH {epoch_i}/{num_epochs}" + "=" * 40)
 
+            # TODO: This x-axis is no longer correct
             train_loss_batch_i = np.arange(len(train_losses)) * log_period
             eval_loss_batch_i = np.arange(len(eval_losses)) * eval_period
             plt.plot(train_loss_batch_i + 1, train_losses, "--o", label="Train Loss")
