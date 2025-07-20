@@ -128,6 +128,13 @@ class Dropout(nn.Module):
         return (gate * x) / (1. - self.p)
 
 
+class Softmax(nn.Module):
+    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
+    def forward(self, x: torch.Tensor):
+        exponentiated = x.exp()
+        return exponentiated / exponentiated.sum(dim=-1)
+
+
 class TransformerEncoderGPT(nn.Module):
     def __init__(
         self,
@@ -271,6 +278,7 @@ class AttentionHead(nn.Module):
         self.k_proj = Linear(d_model, d_head, device=device)
         self.v_proj = Linear(d_model, d_head, device=device)
         self.dropout = Dropout(p=dropout_p)
+        self.softmax = Softmax()
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, use_kv_cache: bool):
         # x.shape = (batch_size, seq_len | 1, d_model)
@@ -285,7 +293,7 @@ class AttentionHead(nn.Module):
         self.kv_cache = (k, v)
 
         weight_logits = q @ k.transpose(1, 2) + attn_mask
-        weights = self.dropout(F.softmax(weight_logits, dim=-1))
+        weights = self.dropout(self.softmax(weight_logits, dim=-1))
         return weights @ v
 
 
@@ -322,6 +330,7 @@ class FasterMultiHeadAttention(nn.Module):
         self.kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None
 
         self.in_proj = Linear(d_model, d_model * 3, device=device)
+        self.softmax = Softmax()
         self.dropout = Dropout(p=dropout_p)
         self.out_proj = Linear(d_model, d_model, device=device)
 
@@ -350,7 +359,7 @@ class FasterMultiHeadAttention(nn.Module):
 
         weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
         with torch.autocast(device_type="cuda", enabled=False):  # softmax needs FP32
-            weights = F.softmax(weight_logits.float(), dim=-1).to(x.dtype)
+            weights = self.softmax(weight_logits.float(), dim=-1).to(x.dtype)
         weights = self.dropout(weights)
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
