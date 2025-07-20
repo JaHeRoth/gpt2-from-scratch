@@ -39,7 +39,6 @@ class PositionalEmbedding(nn.Module):
             / embedding_dim
         )
 
-    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, input_ids: torch.Tensor):
         with torch.no_grad():
             positions = torch.arange(
@@ -94,7 +93,6 @@ class LayerNorm(nn.Module):
         self.bias = nn.Parameter(torch.zeros(d_layer, device=device))
         self.eps = eps
 
-    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor):
         x = x.float()
         # x.shape = (batch_size, seq_len, d_layer)
@@ -132,7 +130,6 @@ class Dropout(nn.Module):
 
 
 class Softmax(nn.Module):
-    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor, dim=-1):
         x = x.float()
         exponentiated = x.exp()
