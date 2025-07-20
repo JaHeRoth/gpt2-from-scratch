@@ -102,7 +102,7 @@ class Dropout(nn.Module):
 class Softmax(nn.Module):
     def forward(self, x: torch.Tensor, dim=-1):
         x = x.float()
-        shift_x = x - x.max(dim=dim, keepdim=True)
+        shift_x = x - x.max(dim=dim, keepdim=True).values
         shift_exp = shift_x.exp()
         return shift_exp / shift_exp.sum(dim=dim, keepdim=True)
 
