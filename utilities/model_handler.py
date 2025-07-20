@@ -208,7 +208,7 @@ def train(
                     model.train()
 
             if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
-                path = checkpoint_dir / f"epoch_{epoch_i}_batch_{batch_i + 1}"
+                path = checkpoint_dir / f"epoch_{epoch_i}_batch_{batch_i}"
                 print(f"Saving state dict checkpoint to '{path}'.")
                 torch.save(model.module.state_dict(), path)
 
