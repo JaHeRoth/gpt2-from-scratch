@@ -88,7 +88,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
         )
 
         tokens_per_update = 524288
-        train_batch_size = 32
+        train_batch_size = 128
         gradient_accumulation_steps = max(1, tokens_per_update // world_size // train_batch_size // context_length)
         if rank == 0:
             print(f"{gradient_accumulation_steps=}")

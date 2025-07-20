@@ -129,21 +129,20 @@ def train(
         train_sampler.set_epoch(epoch_i)
         eval_sampler.set_epoch(epoch_i)
         log_period_start_time = time.time()
-        avg_train_loss = torch.zeros((1,), device=device)
+        avg_train_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
             should_update = batch_i % gradient_accumulation_steps == 0
 
             X: torch.Tensor = batch[:, :-1].contiguous()
             y: torch.Tensor = batch[:, 1:].contiguous()
             with nullcontext() if should_update else model.no_sync():
-                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    logits = model(X)
-                    loss = nn.functional.cross_entropy(
-                        logits.view(-1, logits.shape[-1]),
-                        y.view(-1),
-                        ignore_index=tokenizer.pad_token_id,
-                    ) / gradient_accumulation_steps
-                    avg_train_loss += loss / log_period
+                logits = model(X)
+                loss = nn.functional.cross_entropy(
+                    logits.view(-1, logits.shape[-1]),
+                    y.view(-1),
+                    ignore_index=tokenizer.pad_token_id,
+                ) / gradient_accumulation_steps
+                avg_train_loss += loss / log_period
                 loss.backward()
 
             if should_update:
@@ -168,37 +167,36 @@ def train(
                           f"ms/update={round(ms_per_update)}, "
                           f"tokens/ms={round(tokens_per_update / ms_per_update)}")
                     log_period_start_time = time.time()
-                avg_train_loss = torch.zeros((1,), device=device)
+                avg_train_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
 
             if make_outputs and batch_i % (stream_period * gradient_accumulation_steps) == 0:
                 model.eval()
-                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    print_stream(
-                        model=model,
-                        tokenizer=tokenizer,
-                        prompt=stream_prompt,
-                        device=device,
-                        max_length=model.module.context_length,
-                    )
+                print_stream(
+                    model=model,
+                    tokenizer=tokenizer,
+                    prompt=stream_prompt,
+                    device=device,
+                    max_length=model.module.context_length,
+                )
                 print("", flush=True)
                 model.train()
 
             if batch_i % (eval_period * gradient_accumulation_steps) == 0:
                 with torch.no_grad():
                     model.eval()
-                    avg_val_loss = torch.zeros((1,), device=device)
+                    avg_val_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
                     for validation_batch in validation_dl:
                         X_val: torch.Tensor = validation_batch[:, :-1].contiguous()
                         y_val: torch.Tensor = validation_batch[:, 1:].contiguous()
-                        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                            val_logits = model(X_val)
+                        val_logits = model(X_val)
                         avg_val_loss += (
                             nn.functional.cross_entropy(
                                 val_logits.view(-1, val_logits.shape[-1]),
                                 y_val.view(-1),
                                 ignore_index=tokenizer.pad_token_id,
-                            ) / len(validation_dl)
-                        ).item()
+                            )
+                            / len(validation_dl)
+                        )
                     avg_between_processes(tensor=avg_val_loss)
                     if make_outputs:
                         eval_losses.append(avg_val_loss.item())

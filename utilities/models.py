@@ -19,7 +19,7 @@ def _build_supporters_for_packed_batch(input_ids: torch.Tensor, eos_token_id: in
     same_segment_mask = segment_id.unsqueeze(2) == segment_id.unsqueeze(1)
     causal_mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=input_ids.device))
     should_attend_mask = same_segment_mask & causal_mask
-    additive_attention_mask = torch.where(should_attend_mask, 0, -torch.inf)
+    additive_attention_mask = torch.where(should_attend_mask, 0, -torch.inf).bfloat16()
     multihead_additive_attention_mask = additive_attention_mask.repeat_interleave(
         repeats=nhead, dim=0
     )  # shape: (batch_size * nhead, seq_len, seq_len)
@@ -61,10 +61,11 @@ class PositionalEmbedding(nn.Module):
 class Linear(nn.Module):
     def __init__(self, d_in: int, d_out: int, device, bias: bool = True):
         super().__init__()
-        self.weight = nn.Parameter(torch.randn(d_out, d_in, device=device))
-        self.bias = nn.Parameter(torch.zeros(d_out, device=device)) if bias else None
+        self.weight = nn.Parameter(torch.randn(d_out, d_in, dtype=torch.bfloat16, device=device))
+        self.bias = nn.Parameter(torch.zeros(d_out, dtype=torch.bfloat16, device=device)) if bias else None
 
     def forward(self, x: torch.Tensor):
+        x = x.bfloat16()
         # x.shape = (batch_size, seq_len, d_in)
         # x.unsqueeze(-1).shape = (batch_size, seq_len, d_in, 1)
         # self.weight.shape = (d_out, d_in)
@@ -79,7 +80,7 @@ class Linear(nn.Module):
 class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int, device):
         super().__init__()
-        self.weight = nn.Parameter(torch.randn(num_embeddings, embedding_dim, device=device))
+        self.weight = nn.Parameter(torch.randn(num_embeddings, embedding_dim, dtype=torch.bfloat16, device=device))
 
     def forward(self, x: torch.Tensor):
         # x.shape = (batch_size, seq_len)
@@ -95,6 +96,7 @@ class LayerNorm(nn.Module):
 
     @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor):
+        x = x.float()
         # x.shape = (batch_size, seq_len, d_layer)
         normalized = (
             (x - x.mean(dim=-1, keepdim=True))
@@ -107,8 +109,8 @@ class LayerNorm(nn.Module):
 
 
 class GELU(nn.Module):
-    @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor):
+        x = x.float()
         # x.shape = (batch_size, seq_len, d_layer)
         return x * 0.5 * (1 + torch.erf(x / sqrt(2)))
 
@@ -120,10 +122,11 @@ class Dropout(nn.Module):
         self.p = p
 
     def forward(self, x: torch.Tensor):
+        x = x.bfloat16()
         # x.shape = (batch_size, seq_len, d_layer)
         if not self.training or self.p == 0:
             return x
-        gate = (torch.rand_like(x) > self.p).float()
+        gate = (torch.rand_like(x, dtype=torch.bfloat16) > self.p).bfloat16()
         # gate.shape = (batch_size, seq_len, d_layer)
         return (gate * x) / (1. - self.p)
 
@@ -131,6 +134,7 @@ class Dropout(nn.Module):
 class Softmax(nn.Module):
     @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor, dim=-1):
+        x = x.float()
         exponentiated = x.exp()
         return exponentiated / exponentiated.sum(dim=dim, keepdim=True)
 
@@ -446,7 +450,7 @@ class ParametersGPT2(nn.Module):
         if streaming:
             assert seq_len is not None, "seq_len must be passed when streaming"
             input_idx = torch.ones_like(input_ids, device=input_ids.device) * seq_len
-            mask = torch.zeros(self.nhead, 1, seq_len, device=input_ids.device)
+            mask = torch.zeros(self.nhead, 1, seq_len, dtype=torch.bfloat16, device=input_ids.device)
         else:
             input_idx, mask = _build_supporters_for_packed_batch(
                 input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead
