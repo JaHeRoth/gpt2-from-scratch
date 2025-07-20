@@ -132,7 +132,7 @@ class Softmax(nn.Module):
     @torch.amp.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
     def forward(self, x: torch.Tensor, dim=-1):
         exponentiated = x.exp()
-        return exponentiated / exponentiated.sum(dim=dim)
+        return exponentiated / exponentiated.sum(dim=dim, keepdim=True)
 
 
 class TransformerEncoderGPT(nn.Module):
