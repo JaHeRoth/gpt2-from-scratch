@@ -195,7 +195,10 @@ class FasterMultiHeadAttention(nn.Module):
             v = torch.cat((self.kv_cache[1], v), dim=1)  # shape: (batch_size * num_heads, seq_len, d_head)
         self.kv_cache = (k, v)
 
-        weight_logits = q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask  # shape: (batch_size * num_heads, seq_len, seq_len)
+        # Surprisingly, this manual implementation ran faster than F.scaled_dot_product_attention here (on H100)
+        weight_logits = (
+            q @ k.transpose(-2, -1) / np.sqrt(d_head) + attn_mask
+        )  # shape: (batch_size * num_heads, seq_len, seq_len)
         weights = self.dropout(self.softmax(weight_logits))
         raw_head_results = weights @ v  # shape: (batch_size * num_heads, seq_len, d_head)
         head_results = (
