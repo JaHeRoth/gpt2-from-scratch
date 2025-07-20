@@ -148,7 +148,7 @@ def train(
 
             if should_update:
                 unclipped_update_norms.append(
-                    nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                    nn.utils.clip_grad_norm_(model.parameters(), 1.0).item()
                 )
                 optimizer.step()
                 optimizer.zero_grad()
