@@ -14,7 +14,7 @@ from utilities.model_handler import train
 from utilities.models import ModelConfig, ParametersGPT2
 from utilities import optimizers
 
-context_length = 512
+context_length = 1024
 
 def prep():
     tokenizer_path = Path("outputs/tokenizer")
@@ -23,13 +23,12 @@ def prep():
         AutoTokenizer.from_pretrained(
             "openai-community/gpt2",
             pad_token="<|pad|>",
-            unk_token="<unk>",  # Because it appears often in the dataset
         ).save_pretrained(tokenizer_path)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
 
     _, tokenized_ds = load_preprocessed(
-        hf_path="wikitext", hf_name="wikitext-103-v1", tokenizer=tokenizer, context_length=context_length
+        hf_path="HuggingFaceFW/fineweb-edu", hf_name="sample-10BT", tokenizer=tokenizer, context_length=context_length
     )
 
     return tokenizer, tokenized_ds
@@ -100,7 +99,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             optimizer=optimizer,
             tokenizer=tokenizer,
             tokenized_train_ds=tokenized_ds["train"],
-            tokenized_eval_ds=tokenized_ds["validation"],
+            tokenized_eval_ds=tokenized_ds["test"],
             device=device,
             train_batch_size=train_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,

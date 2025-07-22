@@ -25,16 +25,17 @@ def tokenize(batch, tokenizer, context_length: int) -> dict[str, list[torch.Tens
 
 
 def load_preprocessed(hf_path: str, hf_name: str, tokenizer, context_length: int):
-    dataset = load_dataset(hf_path, hf_name)
+    dataset = load_dataset(hf_path, hf_name, split="train")
+    train_val_split = dataset.train_test_split(test_size=0.01)
 
-    local_path = Path(f"outputs/{hf_path}__{hf_name}__tokenized.hf")  # TODO: Use absolute path
+    local_path = Path(f"outputs/{hf_path}__{hf_name}__tokenized.hf")
     if local_path.exists():
         tokenized_ds = load_from_disk(str(local_path))
     else:
-        tokenized_ds = dataset.map(
+        tokenized_ds = train_val_split.map(
             lambda batch: tokenize(batch, tokenizer, context_length),
             batched=True,
-            remove_columns=dataset["train"].column_names,
+            remove_columns=train_val_split["train"].column_names,
         )
         tokenized_ds.save_to_disk(local_path)
     return dataset, tokenized_ds
