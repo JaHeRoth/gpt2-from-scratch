@@ -127,6 +127,7 @@ def train(
     train_losses = {}
     eval_losses = {}
     unclipped_update_norms = []
+    global_update_i = 0
     for epoch_i in range(1, num_epochs + 1):
         train_sampler.set_epoch(epoch_i)
         eval_sampler.set_epoch(epoch_i)
@@ -134,7 +135,6 @@ def train(
         avg_train_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
             update_i = batch_i // gradient_accumulation_steps
-            global_update_i = (epoch_i - 1) * num_updates + update_i
             should_update = batch_i % gradient_accumulation_steps == 0
 
             X: torch.Tensor = batch[:, :-1].contiguous()
@@ -150,6 +150,7 @@ def train(
                 loss.backward()
 
             if should_update:
+                global_update_i += 1
                 unclipped_update_norms.append(
                     nn.utils.clip_grad_norm_(model.parameters(), 1.0).item()
                 )
