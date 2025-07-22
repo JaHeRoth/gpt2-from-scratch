@@ -178,7 +178,7 @@ def train(
                     tokenizer=tokenizer,
                     prompt=stream_prompt,
                     device=device,
-                    max_length=model.module.context_length,
+                    max_length=X.shape[1],
                 )
                 print("", flush=True)
                 model.train()
