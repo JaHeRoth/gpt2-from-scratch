@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from math import sqrt
 
 import numpy as np
@@ -212,31 +213,28 @@ class FasterMultiHeadAttention(nn.Module):
         return self.out_proj(head_results)
 
 
+@dataclass
+class ModelConfig:
+    d_model: int
+    nhead: int
+    num_layers: int
+    dim_feedforward: int
+    vocab_size: int
+    context_length: int
+    eos_token_id: int
+    dropout_p: float
+    device: str | torch.device
+
+
 class ParametersGPT2(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        nhead: int,
-        num_layers: int,
-        dim_feedforward: int,
-        vocab_size: int,
-        context_length: int,
-        eos_token_id: int,
-        dropout_p: float,
-        device,
-    ):
+    def __init__(self, config: ModelConfig):
         super().__init__()
-        self.d_model = d_model
-        self.nhead = nhead
-        self.num_layers = num_layers
-        self.context_length = context_length
-        self.eos_token_id = eos_token_id
-        self.device = device
+        self.config = config
         self.token_embedder = Embedding(
-            num_embeddings=vocab_size, embedding_dim=d_model, device=device
+            num_embeddings=config.vocab_size, embedding_dim=config.d_model, device=config.device
         )
         self.positional_embedder = Embedding(
-            num_embeddings=context_length, embedding_dim=d_model, device=device
+            num_embeddings=config.context_length, embedding_dim=config.d_model, device=config.device
         )
         self.transformer_layers = nn.ModuleList(
             [
@@ -244,39 +242,39 @@ class ParametersGPT2(nn.Module):
                     [
                         nn.ModuleList(
                             [
-                                LayerNorm(d_model, device=device),
+                                LayerNorm(config.d_model, device=config.device),
                                 FasterMultiHeadAttention(
-                                    d_model=d_model,
-                                    num_heads=nhead,
-                                    dropout_p=dropout_p,
-                                    device=device,
+                                    d_model=config.d_model,
+                                    num_heads=config.nhead,
+                                    dropout_p=config.dropout_p,
+                                    device=config.device,
                                 ),
-                                Dropout(p=dropout_p),
+                                Dropout(p=config.dropout_p),
                             ]
                         ),
                         nn.ModuleList(
                             [
-                                LayerNorm(d_model, device=device),
-                                Linear(d_model, dim_feedforward, device=device),
+                                LayerNorm(config.d_model, device=config.device),
+                                Linear(config.d_model, config.dim_feedforward, device=config.device),
                                 GELU(),
-                                Linear(dim_feedforward, d_model, device=device),
-                                Dropout(p=dropout_p),
+                                Linear(config.dim_feedforward, config.d_model, device=config.device),
+                                Dropout(p=config.dropout_p),
                             ]
                         )
                     ]
                 )
-                for _ in range(num_layers)
+                for _ in range(config.num_layers)
             ]
         )
         self.apply(self.init_weights)
-        self.decoder = nn.Linear(d_model, vocab_size, bias=False, device=device)
+        self.decoder = nn.Linear(config.d_model, config.vocab_size, bias=False, device=config.device)
         self.decoder.weight = self.token_embedder.weight
 
     def init_weights(self, m):
         if isinstance(m, (Linear, Embedding)):
             std = 0.02
-            if isinstance(m, Linear) and m.weight.shape[0] == self.d_model:
-                std /= sqrt(self.num_layers)
+            if isinstance(m, Linear) and m.weight.shape[0] == self.config.d_model:
+                std /= sqrt(self.config.num_layers)
             nn.init.normal_(m.weight, mean=0.0, std=std)
             if getattr(m, "bias", None) is not None:
                 nn.init.zeros_(m.bias)
@@ -288,13 +286,13 @@ class ParametersGPT2(nn.Module):
         if streaming:
             assert seq_len is not None, "seq_len must be passed when streaming"
             input_idx = torch.ones_like(input_ids, device=input_ids.device) * seq_len
-            mask = torch.zeros(self.nhead, 1, seq_len, dtype=torch.bfloat16, device=input_ids.device)
+            mask = torch.zeros(self.config.nhead, 1, seq_len, dtype=torch.bfloat16, device=input_ids.device)
         else:
             input_idx, mask = _build_supporters_for_packed_batch(
-                input_ids, eos_token_id=self.eos_token_id, nhead=self.nhead
+                input_ids, eos_token_id=self.config.eos_token_id, nhead=self.config.nhead
             )
 
-        encoded = self.token_embedder(input_ids) * sqrt(self.d_model) + self.positional_embedder(input_idx)
+        encoded = self.token_embedder(input_ids) * sqrt(self.config.d_model) + self.positional_embedder(input_idx)
         for transformer_layer in self.transformer_layers:
             for subblock in transformer_layer:
                 x = encoded

@@ -1,5 +1,6 @@
 import time
 from contextlib import nullcontext
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
@@ -109,6 +110,7 @@ def train(
         sampler=eval_sampler,
         collate_fn=lambda batch: batch_to_tensor(batch, device),
     )
+    num_updates = len(train_dl) // gradient_accumulation_steps
 
     total_steps = num_epochs * len(train_dl)
     decay_steps = total_steps - warmup_steps
@@ -131,10 +133,8 @@ def train(
         log_period_start_time = time.time()
         avg_train_loss = torch.tensor(0, dtype=torch.bfloat16, device=device)
         for batch_i, batch in enumerate(train_dl, start=1):
-            global_update_i = (
-                (epoch_i - 1) * len(train_dl) // gradient_accumulation_steps
-                + batch_i // gradient_accumulation_steps
-            )
+            update_i = batch_i // gradient_accumulation_steps
+            global_update_i = (epoch_i - 1) * num_updates + update_i
             should_update = batch_i % gradient_accumulation_steps == 0
 
             X: torch.Tensor = batch[:, :-1].contiguous()
@@ -164,8 +164,6 @@ def train(
                     log_period_seconds = time.time() - log_period_start_time
                     ms_per_update = 1000 * log_period_seconds / log_period
                     tokens_per_update = X.numel() * gradient_accumulation_steps * dist.get_world_size()
-                    update_i = batch_i // gradient_accumulation_steps
-                    num_updates = len(train_dl) // gradient_accumulation_steps
                     print(f"Update {update_i}/{num_updates} in epoch {epoch_i}/{num_epochs}: "
                           f"Loss={avg_train_loss.item():.3f}, Grad norm={unclipped_update_norms[-1]:.2f}, "
                           f"ms/update={round(ms_per_update)}, "
@@ -208,9 +206,19 @@ def train(
                     model.train()
 
             if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
-                path = checkpoint_dir / f"epoch_{epoch_i}_batch_{batch_i}"
-                print(f"Saving state dict checkpoint to '{path}'.")
-                torch.save(model.module.state_dict(), path)
+                path = checkpoint_dir / f"epoch_{epoch_i}_update_{update_i}.pt"
+                print(f"Saving checkpoint to '{path}'.")
+                torch.save(
+                    obj={
+                        "model.config": asdict(model.module.config),
+                        "model.state_dict": model.module.state_dict(),
+                        "optimizer.state_dict": optimizer.state_dict(),
+                        "epoch": epoch_i,
+                        "update": update_i,
+                        "global_update": global_update_i,
+                    },
+                    f=path,
+                )
 
         if make_outputs:
             print("=" * 40 + f"COMPLETED EPOCH {epoch_i}/{num_epochs}" + "=" * 40)

@@ -11,7 +11,7 @@ from torch.nn.parallel import DistributedDataParallel
 import time
 from pathlib import Path
 from utilities.model_handler import train
-from utilities.models import ParametersGPT2
+from utilities.models import ModelConfig, ParametersGPT2
 from utilities import optimizers
 
 context_length = 512
@@ -59,15 +59,17 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
 
         # Hyperparameters are inspired by GPT and GPT-3 papers
         model = ParametersGPT2(
-            d_model=768,
-            nhead=12,
-            num_layers=12,
-            dim_feedforward=3072,
-            vocab_size=ceil(len(tokenizer) / 64) * 64,  # Multiples of 64 make for faster matrix operations
-            context_length=context_length,
-            eos_token_id=tokenizer.eos_token_id,
-            dropout_p=0.1,
-            device=device,
+            config=ModelConfig(
+                d_model=768,
+                nhead=12,
+                num_layers=12,
+                dim_feedforward=3072,
+                vocab_size=ceil(len(tokenizer) / 64) * 64,  # Multiples of 64 make for faster matrix operations
+                context_length=context_length,
+                eos_token_id=tokenizer.eos_token_id,
+                dropout_p=0.1,
+                device=device,
+            )
         )
         model.compile()
         # We choose to always use DDP, to avoid downstream if-statements for the rare case of single-device training.
@@ -88,8 +90,8 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             lr=2.5e-4,
         )
 
-        tokens_per_update = 524288
-        train_batch_size = 128
+        tokens_per_update = 524288 * 0  # Non-standard
+        train_batch_size = 64
         gradient_accumulation_steps = max(1, tokens_per_update // world_size // train_batch_size // context_length)
         if rank == 0:
             print(f"{gradient_accumulation_steps=}")
