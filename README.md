@@ -27,4 +27,8 @@ python run.py
   - GPU tricks (kernel fusion through torch.compile, optimizing tensor sizes)
   - Mixed-precision training
   - Distributed training with DistributedDataParallel
+- Future directions:
+  - Optimizations of newer models: MoE, MLA, ROPE, YaRN, SWiGLU, QKNorm?
+  - SFT, to turn into chatbot
+  - Reinforcement learning and allowing "thinking" stage (although I doubt model is smart enough to benefit from chain of thought)
 - Sources: Attention is all you need, GPT paper, GPT2 paper, GELU paper, AdamW paper, weight tying paper (1608.05859v3), nucleus sampling paper (1904.09751v2), Karpathy's lectures and tutorials, etc?
