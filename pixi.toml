@@ -27,7 +27,6 @@ evaluate = ">=0.4.3,<0.5"
 accelerate = ">=1.5.2,<2"
 timm = ">=1.0.15,<2"
 jupyter = ">=1.1.1,<2"
-huggingface_hub = ">=0.30.2,<0.31"
 jupytext = ">=1.17.1,<2"
 
 [target.linux-64.dependencies]
@@ -35,3 +34,6 @@ pytorch-gpu = "*"
 
 [target.osx-arm64.dependencies]
 pytorch = ">=2.6.0,<3"
+
+[pypi-dependencies]
+huggingface-hub = { version = "*", extras = ["hf-xet"] }

@@ -40,8 +40,11 @@ def stream(model, input_ids: torch.Tensor, max_length: int, prob_threshold: floa
 
 
 def print_stream(
-    model, tokenizer, prompt: str, device, max_length: int, prob_threshold: float = 0.95, temperature: float = 1.0
+    model, tokenizer, prompt: str, device, max_length: int | None, prob_threshold: float = 0.95, temperature: float = 1.0
 ):
+    if max_length is None:
+        max_length = model.config.context_length
+
     print(prompt, end="", flush=True)
     input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
     for token in stream(
@@ -73,15 +76,16 @@ def train(
     device,
     make_outputs: bool,
     stream_prompt: str,
-    train_batch_size: int = 64,
-    gradient_accumulation_steps: int = 1,
-    num_epochs: int = 100,
-    warmup_steps: int = 2000,
-    log_period: int = 25,
-    stream_period: int = 100,
-    eval_period: int = 250,
-    checkpoint_period: int = 50,
-    run_id: str = None,
+    train_batch_size: int,
+    gradient_accumulation_steps: int,
+    num_epochs: int,
+    warmup_steps: int,
+    log_period: int,
+    stream_period: int,
+    eval_period: int,
+    plot_period: int,
+    checkpoint_period: int,
+    run_id: str,
 ) -> tuple[list[float], list[float]]:
     """Trains `model` (in-place) and returns training and eval losses."""
     plot_dir = Path(f"outputs/plots/{run_id}")
@@ -207,42 +211,43 @@ def train(
                     model.train()
 
             if make_outputs and batch_i % (checkpoint_period * gradient_accumulation_steps) == 0:
-                path = checkpoint_dir / f"epoch_{epoch_i}_update_{update_i}.pt"
-                print(f"Saving checkpoint to '{path}'.")
-                torch.save(
-                    obj={
-                        "model.config": asdict(model.module.config),
-                        "model.state_dict": model.module.state_dict(),
-                        "optimizer.state_dict": optimizer.state_dict(),
-                        "epoch": epoch_i,
-                        "update": update_i,
-                        "global_update": global_update_i,
-                    },
-                    f=path,
-                )
+                checkpoint_dict = {
+                    "model.config": asdict(model.module.config),
+                    "model.state_dict": model.module.state_dict(),
+                    "optimizer.state_dict": optimizer.state_dict(),
+                    "epoch": epoch_i,
+                    "update": update_i,
+                    "global_update": global_update_i,
+                }
+
+                unique_path = checkpoint_dir / f"epoch_{epoch_i}_update_{update_i}.pt"
+                standard_path = "outputs/model.pt"
+                print(f"Saving checkpoint to '{unique_path}' and '{standard_path}'.")
+                torch.save(obj=checkpoint_dict, f=unique_path)
+                torch.save(obj=checkpoint_dict, f=standard_path)
+
+            if make_outputs and batch_i % (plot_period * gradient_accumulation_steps) == 0:
+                plt.plot(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
+                plt.plot(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
+                plt.xlabel("Update")
+                plt.ylabel("Loss")
+                plt.xscale("log")
+                plt.yscale("log")
+                plt.legend()
+                plt.grid()
+                plt.savefig(plot_dir / f"losses__epoch_{epoch_i}__update_{update_i}.png", bbox_inches="tight")
+                plt.show()
+                plt.clf()
+
+                plt.plot(unclipped_update_norms)
+                plt.xlabel("Update")
+                plt.ylabel("Unclipped update norm")
+                plt.grid()
+                plt.savefig(plot_dir / f"unclipped_update_norm__epoch_{epoch_i}__update_{update_i}.png", bbox_inches="tight")
+                plt.show()
+                plt.clf()
 
         if make_outputs:
             print("=" * 40 + f"COMPLETED EPOCH {epoch_i}/{num_epochs}" + "=" * 40)
-
-            plt.plot(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
-            plt.plot(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
-            plt.xlabel("Update")
-            plt.ylabel("Loss")
-            plt.title(f"Loss over first {epoch_i} epoch(s)")
-            plt.xscale("log")
-            plt.yscale("log")
-            plt.legend()
-            plt.grid()
-            plt.savefig(plot_dir / f"losses__epoch_{epoch_i}.png", bbox_inches="tight")
-            plt.show()
-            plt.clf()
-
-            plt.plot(unclipped_update_norms)
-            plt.xlabel("Update")
-            plt.ylabel("Unclipped update norm")
-            plt.grid()
-            plt.savefig(plot_dir / f"unclipped_update_norm__epoch_{epoch_i}.png", bbox_inches="tight")
-            plt.show()
-            plt.clf()
 
     return train_losses, eval_losses

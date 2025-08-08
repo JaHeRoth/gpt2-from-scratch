@@ -1,10 +1,14 @@
 from pathlib import Path
 
 import torch
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset, load_from_disk, DatasetDict
+from datasets.formatting.formatting import LazyDict
+from transformers import PreTrainedTokenizerBase
 
 
-def tokenize(batch, tokenizer, context_length: int) -> dict[str, list[torch.Tensor]]:
+def tokenize(
+    batch: LazyDict, tokenizer: PreTrainedTokenizerBase, context_length: int
+) -> dict[str, torch.Tensor]:
     dtype = torch.uint16 if len(tokenizer) < 2 ** 16 else torch.uint32
     # +1 since last token of sequences won't be used as input (since has no next token)
     row_length = context_length + 1
@@ -27,19 +31,30 @@ def tokenize(batch, tokenizer, context_length: int) -> dict[str, list[torch.Tens
     }
 
 
-def load_preprocessed(hf_path: str, hf_name: str, tokenizer, context_length: int):
-    dataset = load_dataset(hf_path, hf_name, split="train")#.shard(num_shards=1000, index=0)
-    train_val_split = dataset.train_test_split(test_size=0.01)
+def load_preprocessed(
+    author: str, dataset: str, subset: str, sampled_percent: int, test_size: int, context_length: int, tokenizer: PreTrainedTokenizerBase
+) -> DatasetDict:
+    tokenized_name = f"{author}__{dataset}__{subset}__{sampled_percent}__{test_size}__{context_length}__tokenized"
+    local_path = Path(f"outputs/datasets/{tokenized_name}.hf")
 
-    local_path = Path(f"outputs/{hf_path}__{hf_name}__tokenized.hf")
     if local_path.exists():
-        tokenized_ds = load_from_disk(str(local_path))
-    else:
-        tokenized_ds = train_val_split.map(
-            lambda batch: tokenize(batch, tokenizer, context_length),
-            remove_columns=train_val_split["train"].column_names,
-            load_from_cache_file=False,
-            batched=True,
-        )
-        tokenized_ds.save_to_disk(local_path)
-    return dataset, tokenized_ds
+        print("Found tokenized dataset locally, so loading that.")
+        return load_from_disk(str(local_path))
+
+    try:
+        print("Attempting to load tokenized dataset from HuggingFace Hub.")
+        return load_dataset(f"jaheroth/{tokenized_name}")
+    except FileNotFoundError:
+        print(f"Could not find tokenized dataset locally or on HuggingFace Hub, so will recreate.")
+
+    ds = load_dataset(f"{author}/{dataset}", subset, split=f"train[:{sampled_percent}%]")
+    train_val_split = ds.train_test_split(test_size=test_size)
+    tokenized_ds = train_val_split.map(
+        lambda batch: tokenize(batch, tokenizer, context_length),
+        remove_columns=train_val_split["train"].column_names,
+        load_from_cache_file=False,
+        batched=True,
+    )
+
+    tokenized_ds.save_to_disk(local_path)
+    return tokenized_ds

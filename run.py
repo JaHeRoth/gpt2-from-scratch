@@ -24,11 +24,17 @@ def prep():
             "openai-community/gpt2",
             pad_token="<|pad|>",
         ).save_pretrained(tokenizer_path)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, model_max_length=None)
 
 
-    _, tokenized_ds = load_preprocessed(
-        hf_path="HuggingFaceFW/fineweb-edu", hf_name="sample-10BT", tokenizer=tokenizer, context_length=context_length
+    tokenized_ds = load_preprocessed(
+        author="HuggingFaceFW",
+        dataset="fineweb-edu",
+        subset="sample-10BT",
+        sampled_percent=10,
+        test_size=10 ** 4,
+        context_length=context_length,
+        tokenizer=tokenizer,
     )
 
     return tokenizer, tokenized_ds
@@ -86,11 +92,11 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             ],
             betas=(0.9, 0.98),
             eps=1e-9,
-            lr=2.5e-4,
+            lr=1e-3,
         )
 
         tokens_per_update = 524288 * 0  # Non-standard
-        train_batch_size = 64
+        train_batch_size = 16
         gradient_accumulation_steps = max(1, tokens_per_update // world_size // train_batch_size // context_length)
         if rank == 0:
             print(f"{gradient_accumulation_steps=}")
@@ -106,12 +112,13 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             warmup_steps=500,  # Non-standard
             num_epochs=25,  # Non-standard
             run_id=str(int(time.time())),
-            # We disable these for all but rank 0, to avoid cluttering the output
+            # We disable outputs for all but rank 0, to avoid cluttering the output
             make_outputs=rank == 0,
-            stream_prompt=f"{tokenizer.eos_token}She first",
+            stream_prompt=f"{tokenizer.eos_token}This",
             log_period=5,
             stream_period=250,
             eval_period=500,
+            plot_period=100,
             checkpoint_period=100,
         )
     finally:
