@@ -4,6 +4,7 @@ import torch
 from datasets import load_dataset, load_from_disk, DatasetDict
 from datasets.formatting.formatting import LazyDict
 from transformers import PreTrainedTokenizerBase
+from datasets.exceptions import DatasetNotFoundError
 
 
 def tokenize(
@@ -44,7 +45,7 @@ def load_preprocessed(
     try:
         print("Attempting to load tokenized dataset from HuggingFace Hub.")
         return load_dataset(f"jaheroth/{tokenized_name}")
-    except FileNotFoundError:
+    except DatasetNotFoundError:
         print(f"Could not find tokenized dataset locally or on HuggingFace Hub, so will recreate.")
 
     ds = load_dataset(f"{author}/{dataset}", subset, split=f"train[:{sampled_percent}%]")
