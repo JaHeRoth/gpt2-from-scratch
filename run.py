@@ -31,7 +31,7 @@ def prep():
         author="HuggingFaceFW",
         dataset="fineweb-edu",
         subset="sample-10BT",
-        sampled_percent=10,
+        sampled_percent=100,
         test_size=10 ** 4,
         context_length=context_length,
         tokenizer=tokenizer,
