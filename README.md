@@ -16,10 +16,12 @@ pixi install
 pixi shell
 ```
 
-Finally, run `run.py` like you would any other python script:
+Finally, to run training, run `train.py` like you would any other python script:
 ```bash
-python run.py
+python train.py
 ```
+To instead run inference on a trained model, run `inference.py` or open it as a jupytext notebook.
+
 - Learnings:
   - Exact network architectures of GPT and GPT2 (down to the level of every individual nn.Parameter)
   - Inner workings of AdamW optimizer
