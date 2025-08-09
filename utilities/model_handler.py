@@ -227,12 +227,12 @@ def train(
                 torch.save(obj=checkpoint_dict, f=standard_path)
 
             if make_outputs and batch_i % (plot_period * gradient_accumulation_steps) == 0:
-                plt.plot(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
-                plt.plot(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
+                plt.loglog(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
+                plt.loglog(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
+                if len(eval_losses) > 0:
+                    plt.xlim(left=np.min(list(eval_losses.keys())))
                 plt.xlabel("Update")
                 plt.ylabel("Loss")
-                plt.xscale("log")
-                plt.yscale("log")
                 plt.legend()
                 plt.grid()
                 loss_plot_path = plot_dir / f"losses__epoch_{epoch_i}__update_{update_i}.png"
