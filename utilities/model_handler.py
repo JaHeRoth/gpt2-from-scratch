@@ -233,7 +233,7 @@ def train(
                     else {
                         # To avoid half the loglog plot being taken up by early updates that we don't care about
                         upd_i: train_loss
-                        for upd_i, train_loss in train_losses
+                        for upd_i, train_loss in train_losses.items()
                         if upd_i >= np.min(list(eval_losses.keys()))
                     }
                 )
