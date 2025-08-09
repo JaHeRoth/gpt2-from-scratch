@@ -4,6 +4,9 @@
   - Install pixi if you haven't already:
     - On Linux: `curl -fsSL https://pixi.sh/install.sh | sh`
     - On MacOS: TODO
+  - Install git lfs if you haven't already:
+    - On Linux: `sudo apt-get install git-lfs ; git lfs install`
+    - On MacOS: TODO
 
 Then restart your terminal, clone this repo, navigate into it and activate the pixi environment:
 ```bash
