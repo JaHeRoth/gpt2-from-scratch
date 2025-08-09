@@ -1,7 +1,7 @@
 [workspace]
 authors = ["Jacob H. Rothschild"]
 channels = ["conda-forge"]
-name = "reimplementing"
+name = "gpt2-from-scratch"
 platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
