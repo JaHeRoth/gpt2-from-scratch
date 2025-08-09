@@ -227,7 +227,19 @@ def train(
                 torch.save(obj=checkpoint_dict, f=standard_path)
 
             if make_outputs and batch_i % (plot_period * gradient_accumulation_steps) == 0:
-                plt.loglog(train_losses.keys(), train_losses.values(), "--o", label="Train Loss")
+                filtered_train_losses = (
+                    train_losses
+                    if len(eval_losses) == 0
+                    else {
+                        # To avoid half the loglog plot being taken up by early updates that we don't care about
+                        upd_i: train_loss
+                        for upd_i, train_loss in train_losses
+                        if upd_i >= np.min(list(eval_losses.keys()))
+                    }
+                )
+                plt.loglog(
+                    filtered_train_losses.keys(), filtered_train_losses.values(), "--o", label="Train Loss"
+                )
                 plt.loglog(eval_losses.keys(), eval_losses.values(), "--o", label="Eval Loss")
                 if len(eval_losses) > 0:
                     plt.xlim(left=np.min(list(eval_losses.keys())))
