@@ -110,7 +110,7 @@ def worker(rank, world_size, tokenizer, tokenized_ds):
             train_batch_size=train_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
             warmup_steps=500,  # Non-standard
-            num_epochs=25,  # Non-standard
+            num_epochs=5,  # Non-standard
             run_id=str(int(time.time())),
             # We disable outputs for all but rank 0, to avoid cluttering the output
             make_outputs=rank == 0,
