@@ -257,7 +257,7 @@ def train(
                 plt.ylabel("Unclipped update norm")
                 plt.grid()
                 norm_plot_path = plot_dir / f"unclipped_update_norm__epoch_{epoch_i}__update_{update_i}.png"
-                print(f"Saving gradient norm plot to '{loss_plot_path}'")
+                print(f"Saving gradient norm plot to '{norm_plot_path}'")
                 plt.savefig(norm_plot_path, bbox_inches="tight")
                 plt.clf()
 
