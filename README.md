@@ -5,14 +5,14 @@ However, I hope this project can also be of use to others, if only by providing 
 ## Contents
 - `train.py` contains the entry point for training this GPT-2 like model on a subset of FineWeb-Edu, across all GPUs of the machine.
 - `inference.ipynb` contains code for loading and streaming from the model trained in `train.py` (or the model I have pre-trained for you).
-- `outputs/tokenizer` and `outputs/model.pt` contain the result of my training run on a 1024-length sequence packed encoding of the _sample-10BT_ subset of _FineWeb-Edu_, for just below 30k updates of batch size 512 each.
+- `outputs/tokenizer` and `outputs/model.pt` contain the result of my training run on a 1024-length sequence packed encoding of the _sample-10BT_ subset of _FineWeb-Edu_, for just below 30k updates (1.5 epochs) of batch size 512 each.
 - `utilities` contains our model and optimizer architectures, as well as all the helper code we use for loading and preprocessing data and performing our training runs.
 
 ## Prerequisites
 - [pixi](https://pixi.sh/latest/). Installation guide: `curl -fsSL https://pixi.sh/install.sh | sh`
 - [git lfs](https://git-lfs.com/). Installation guide:
   - Linux: `sudo apt-get install git-lfs ; git lfs install`
-  - MacOS: `brew install git-lfs ; git lfs install`
+  - macOS: `brew install git-lfs ; git lfs install`
 
 ## Setup
 ```bash
@@ -23,7 +23,7 @@ pixi shell
 ```
 
 ## Learnings
-- Exact network architectures of GPT and GPT2 (down to the level of every individual nn.Parameter)
+- Exact network architectures of GPT and GPT-2 (down to the level of every individual nn.Parameter)
 - Inner workings of AdamW optimizer
 - LLM sampling tricks (and implementing temperature and nucleus sampling)
 - Sequence packing
@@ -40,6 +40,7 @@ pixi shell
 
 ## Sources
 - [Attention Is All You Need (Transformer paper)](https://arxiv.org/abs/1706.03762)
+- [Generating Wikipedia by Summarizing Long Sequences (Decoder-only transformer paper)](https://arxiv.org/abs/1801.10198)
 - [Improving Language Understanding by Generative Pre-Training (GPT paper)](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
 - [Language Models are Unsupervised Multitask Learners (GPT-2 paper)](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
 - [Gaussian Error Linear Units (GELU paper)](https://arxiv.org/abs/1606.08415)
